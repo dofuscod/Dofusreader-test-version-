@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>English Reader</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f5f2eb;--panel:#fff;--text:#1a1a1a;--muted:#888;
+  --accent:#2a7a4b;--accent-soft:#e6f4ec;--border:#e0dbd0;--radius:14px;
+  --serif:Georgia,"Palatino Linotype",serif;
+  --tap:44px; /* минимальный размер tap target для телефона */
+}
+[data-theme="dark"]{
+  --bg:#141618;--panel:#1c1f22;--text:#e8e4dc;--muted:#777;
+  --accent:#5dba80;--accent-soft:#1a2e22;--border:#2a2d32;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",sans-serif;transition:background .2s,color .2s;overflow-x:hidden;}
+.app{max-width:720px;margin:0 auto;padding:16px 16px 100px;}
+
+/* ── topbar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.topbar h1{font-size:18px;font-weight:700;}
+.top-actions{display:flex;gap:8px;}
+.icon-btn{
+  min-width:var(--tap);min-height:var(--tap);
+  border-radius:10px;border:1px solid var(--border);
+  background:var(--panel);color:var(--text);font-size:16px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  padding:0 8px;white-space:nowrap;
+}
+.icon-btn:active{opacity:.7;}
+.icon-btn.danger{color:#c0392b;border-color:#c0392b33;}
+
+/* ── views ── */
+.view{display:none;}.view.active{display:block;}
+
+/* ── nav tabs ── */
+.nav-tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px;}
+.nav-tab{
+  padding:8px 16px;border-radius:10px;border:1px solid var(--border);
+  background:var(--panel);color:var(--muted);font-size:14px;font-weight:600;
+  cursor:pointer;white-space:nowrap;min-height:var(--tap);
+}
+.nav-tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* ── cards ── */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+.card+.card{margin-top:12px;}
+.card-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+
+/* ── input ── */
+textarea{
+  width:100%;min-height:150px;padding:12px;font-size:16px;line-height:1.55;
+  resize:vertical;border:1px solid var(--border);border-radius:10px;
+  background:var(--bg);color:var(--text);font-family:inherit;
+  -webkit-appearance:none;
+}
+textarea:focus{outline:none;border-color:var(--accent);}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.btn{
+  border:none;border-radius:10px;padding:0 16px;
+  height:var(--tap);font-size:15px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.btn-primary{background:var(--accent);color:#fff;flex:1;}
+.btn-secondary{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-secondary:active,.btn-primary:active{opacity:.75;}
+input[type="file"]{display:none;}
+
+/* ── library ── */
+.lib-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:20px 0 8px;}
+.lib-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px;border:1px solid var(--border);border-radius:10px;
+  background:var(--panel);cursor:pointer;margin-top:8px;
+}
+.lib-item:active{opacity:.75;}
+.lib-title{font-weight:600;font-size:15px;}
+.lib-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.lib-del{
+  background:none;border:none;color:var(--muted);font-size:20px;
+  cursor:pointer;min-width:var(--tap);min-height:var(--tap);
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* ── reader topbar ── */
+.reader-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;}
+.reader-bar .left{display:flex;gap:8px;}
+.font-ctrl{
+  display:flex;align-items:center;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;
+}
+.font-ctrl button{
+  background:none;border:none;color:var(--text);
+  min-width:42px;height:var(--tap);cursor:pointer;font-size:14px;font-weight:700;
+}
+.font-ctrl button:active{background:var(--accent-soft);}
+
+/* ── progress ── */
+.prog-wrap{margin-bottom:14px;}
+.prog-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:5px;}
+.prog-track{height:7px;background:var(--border);border-radius:4px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .3s;}
+
+/* ── reading card ── */
+.reading-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px 18px;}
+
+/* абзац */
+.para-block{margin-bottom:1.6em;}
+.para-block+.para-block{padding-top:.2em;}
+
+/* предложение */
+.sent-block{margin-bottom:.5em;}
+.ru-line{
+  font-family:var(--serif);
+  font-size:var(--ru-size,20px);
+  line-height:1.7;color:var(--text);margin-bottom:2px;
+}
+.en-line{
+  font-family:var(--serif);
+  font-size:var(--en-size,13px);
+  line-height:1.6;color:var(--muted);
+}
+.sent-block.fully-known .ru-line{display:none;}
+.sent-block.fully-known .en-line{font-size:var(--ru-size,20px);color:var(--text);}
+
+/* английское слово */
+.ew{
+  cursor:pointer;border-radius:3px;padding:0 1px;
+  /* НЕ используем :hover text-decoration — на мобиле залипает */
+}
+@media(hover:hover){
+  .ew:hover{background:var(--accent-soft);color:var(--accent);}
+  .ew.known:hover{background:#fdecea;color:#c0392b;text-decoration:line-through;}
+}
+.ew:active{background:var(--accent-soft);}
+.ew.known{color:var(--accent);font-weight:600;}
+.ew.known:active{background:#fdecea;text-decoration:line-through;}
+
+/* ── float bar снизу ── */
+.float-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:40;
+  display:none;
+  background:var(--panel);border-top:1px solid var(--border);
+  padding:8px 16px;
+  padding-bottom:max(12px,env(safe-area-inset-bottom));
+  align-items:center;justify-content:space-between;gap:10px;
+}
+.float-bar.visible{display:flex;}
+
+/* ── словарь ── */
+.words-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;}
+.word-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;font-size:13px;
+}
+.word-chip button{
+  background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:14px;padding:0 2px;min-height:24px;
+}
+.word-chip button:active{color:#c0392b;}
+.dict-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+
+/* ── прогресс/статистика ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+.stat-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;}
+.stat-num{font-size:28px;font-weight:700;color:var(--accent);}
+.stat-label{font-size:12px;color:var(--muted);margin-top:2px;}
+.level-bar-wrap{margin:16px 0 8px;}
+.level-bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;}
+.level-bar-track{height:10px;background:var(--border);border-radius:6px;overflow:hidden;margin-bottom:12px;}
+.level-bar-fill{height:100%;border-radius:6px;transition:width .5s;}
+.tips-block{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:14px;margin-top:12px;font-size:13px;line-height:1.6;}
+.tips-block b{display:block;margin-bottom:6px;color:var(--accent);}
+
+/* ── supabase auth ── */
+.auth-card{text-align:center;padding:20px;}
+.auth-card p{font-size:14px;color:var(--muted);margin-bottom:16px;line-height:1.5;}
+.auth-input{
+  width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;
+  background:var(--bg);color:var(--text);font-size:16px;margin-bottom:10px;
+}
+.auth-input:focus{outline:none;border-color:var(--accent);}
+.auth-msg{font-size:13px;color:var(--muted);margin-top:10px;min-height:20px;}
+
+/* ── error banner ── */
+.err-banner{
+  position:fixed;top:10px;left:10px;right:10px;z-index:90;
+  background:#c0392b;color:#fff;border-radius:10px;
+  padding:12px 15px;font-size:14px;line-height:1.4;text-align:center;
+  box-shadow:0 6px 20px rgba(0,0,0,.3);
+}
+
+/* ── modal ── */
+.modal-overlay{
+  position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.5);
+  display:flex;align-items:flex-end;justify-content:center;padding:0;
+}
+.modal-box{
+  background:var(--panel);border-radius:20px 20px 0 0;
+  padding:20px 20px max(20px,env(safe-area-inset-bottom));
+  width:100%;max-width:500px;
+}
+.modal-box p{font-size:16px;line-height:1.5;margin-bottom:16px;text-align:center;}
+.modal-row{display:flex;gap:10px;}
+
+@media(max-width:380px){.stat-grid{grid-template-columns:1fr;}}
+
+/* ── лёгкие карточки, больше воздуха ── */
+.lib-item{border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.card{box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.nav-tab{border-radius:10px;font-size:15px;}
+
+/* ── глава-статистика (компактный блок после чтения) ── */
+.chapter-stats{
+  position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:16px;padding:14px 20px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);
+  display:flex;gap:24px;align-items:center;
+  font-size:13px;z-index:50;
+  animation:slideUp .3s ease;
+}
+.chapter-stats .cs-num{font-size:22px;font-weight:700;line-height:1;}
+.chapter-stats .cs-lbl{color:var(--muted);font-size:11px;margin-top:2px;}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══════════ HOME ══════════ -->
+<div class="view active" id="v-home">
+  <div class="topbar">
+    <h1>📖 English Reader</h1>
+    <div class="top-actions">
+      <button class="icon-btn" id="themeBtn">🌙</button>
+      <button class="icon-btn" id="accountBtn" onclick="switchTab('account')" title="Аккаунт" style="font-size:18px;border:none;background:none;color:var(--muted);">👤</button>
+    </div>
+  </div>
+
+  <!-- Навигация -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="tab-library" onclick="switchTab('library')">📚 Тексты</button>
+    <button class="nav-tab" id="tab-new" onclick="switchTab('new')">＋ Новый</button>
+  </div>
+
+  <!-- Library tab -->
+  <div id="tab-content-library">
+    <div id="library"></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.5;text-align:center;">
+      С AO3: нажми Download → EPUB и загрузи файл
+    </p>
+  </div>
+
+  <!-- New text tab -->
+  <div id="tab-content-new" style="display:none;">
+    <div class="card">
+      <div class="card-label">Добавить текст</div>
+      <textarea id="inputText" placeholder="Вставь текст на английском…"></textarea>
+      <div class="row">
+        <button class="btn btn-primary" id="buildBtn">Открыть для чтения</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn btn-secondary" id="fileBtn">📂 Файл (.txt / .epub / .html)</button>
+        <input type="file" id="fileInput" accept=".txt,.epub,.html,.htm,.pdf">
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6;">
+        Крупно — русский перевод. Мелко — английский оригинал.<br>
+        Тап по английскому слову — запомнить. Ещё раз — забыть.
+      </p>
+    </div>
+  </div>
+
+  <!-- Account tab -->
+  <div id="tab-content-account" style="display:none;">
+    <div id="auth-section"></div>
+  </div>
+</div>
+
+<!-- ══════════ READER ══════════ -->
+<div class="view" id="v-reader">
+  <div class="reader-bar">
+    <div class="left">
+      <button class="icon-btn" id="backBtn">←</button>
+      <div class="font-ctrl">
+        <button id="fontMinus">A−</button>
+        <button id="fontPlus">A+</button>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="themeBtn2">🌙</button>
+      <button class="icon-btn" id="wordsBtn2">📚</button>
+      <button class="icon-btn danger" id="delBtn">🗑</button>
+    </div>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog-label"><span id="progTxt">0% слов известно</span><span id="progCount"></span></div>
+    <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  </div>
+  <div class="reading-card" id="readingCard"></div>
+</div>
+
+<!-- ══════════ FLOAT BAR ══════════ -->
+<div class="float-bar" id="floatBar">
+  <button class="icon-btn" id="floatBack">← Назад</button>
+  <div class="font-ctrl">
+    <button id="floatMinus">A−</button>
+    <button id="floatPlus">A+</button>
+  </div>
+  <button class="icon-btn" id="floatWords">📚</button>
+  <button class="icon-btn" id="floatTheme">🌙</button>
+</div>
+
+<!-- ══════════ WORDS ══════════ -->
+<div class="view" id="v-words">
+  <div class="topbar">
+    <h1>📚 Словарь</h1>
+    <button class="icon-btn" id="closeWordsBtn">✕</button>
+  </div>
+  <!-- Nav tabs inside words view -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="wtab-list" onclick="switchWordsTab('list')">Слова</button>
+    <button class="nav-tab" id="wtab-stats" onclick="switchWordsTab('stats')">Прогресс</button>
+  </div>
+
+  <div id="wtab-content-list">
+    <div class="card">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+        Хранится в Chrome на этом устройстве. Очистка кэша сотрёт — сохрани через Экспорт.
+      </p>
+      <div class="dict-actions">
+        <button class="btn btn-secondary" id="exportBtn">⬇ Экспорт .json</button>
+        <button class="btn btn-secondary" id="importBtn">⬆ Импорт .json</button>
+        <input type="file" id="importInput" accept=".json">
+      </div>
+      <div class="card-label" id="wordsCount">0 слов</div>
+      <div class="words-list" id="wordsList"></div>
+    </div>
+  </div>
+
+  <div id="wtab-content-stats" style="display:none;">
+    <div class="card" id="statsContent"></div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   SUPABASE CONFIG
+   ВАЖНО: этот anon key безопасен в публичном репо ТОЛЬКО
+   если в Supabase включён RLS (Row Level Security) на всех
+   таблицах. Без RLS любой может читать/писать твои данные.
+   Dashboard → Table Editor → таблица → Enable RLS
+══════════════════════════════════════════════════════════ */
+const SUPABASE_URL  = ""; // TODO: вставь URL проекта из Supabase Dashboard → Settings → API
+const SUPABASE_ANON = "sb_publishable_pBHbJ0N263wPdh6j41nxug_C387GhUt";
+let sb = null; // будет инициализирован при наличии URL
+
+/* ── МУЛЬТИЯЗЫЧНОСТЬ: пассивный слой (future-ready) ──
+   Сейчас: source=en, target=ru (не меняем логику перевода)
+   Будущее: передавать в translate(text, SRC_LANG, TGT_LANG)
+   и router выбирает нужный endpoint/LLM
+── */
+const LANG = { source: "en", target: "ru" }; // future: менять здесь или через UI
+
+/* ── CHUNKING: пассивный слой (future-ready) ──
+   Разбивает нормализованный текст на чанки 1000-1500 символов.
+   НЕ влияет на UI. НЕ используется для перевода.
+   Используется только для хранения структуры (Supabase).
+── */
+function chunkText(normalizedText, maxChars=1400){
+  const chunks = [];
+  const paras = normalizedText.split(/\n\n+/);
+  let current = "";
+  for(const para of paras){
+    if(current.length + para.length + 2 > maxChars && current.length > 0){
+      chunks.push(current.trim());
+      current = "";
+    }
+    current += (current ? "\n\n" : "") + para;
+  }
+  if(current.trim()) chunks.push(current.trim());
+  return chunks;
+}
+
+/* ── SUPABASE: таблица translation_chunks (passive, no UI impact) ──
+   Схема (создать в Supabase):
+   CREATE TABLE translation_chunks (
+     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+     document_id text NOT NULL,
+     chunk_index int NOT NULL,
+     source_text text NOT NULL,
+     source_hash text NOT NULL,
+     created_at timestamptz DEFAULT now()
+   );
+   ALTER TABLE translation_chunks ENABLE ROW LEVEL SECURITY;
+── */
+async function saveChunksToSupabase(documentId, rawText){
+  // Пассивный слой — не влияет на логику, не блокирует UI
+  if(!sb || !documentId || !rawText) return;
+  try{
+    const chunks = chunkText(rawText);
+    const rows = chunks.map((text, idx) => ({
+      document_id: documentId,
+      chunk_index: idx,
+      source_text: text,
+      source_hash: btoa(encodeURIComponent(text)).slice(0,64),
+    }));
+    await sb.from("translation_chunks").upsert(rows, {onConflict:"document_id,chunk_index"});
+  }catch(e){ console.warn("chunks save skipped:", e.message); } // fallback: игнорируем ошибку
+}
+
+/* ── TRANSLATION CACHE LAYER: future-ready hash lookup ──
+   hash(text) → Supabase lookup. Сейчас: пассивно, ничего не делает.
+── */
+async function lookupTranslationCache(text){ return null; } // placeholder
+
+/* ══════════════════════════════════════════════════════════
+   LOCALSTORAGE
+══════════════════════════════════════════════════════════ */
+const LS={
+  known:"er_known_v3",texts:"er_texts_v3",scache:"er_scache_v3",
+  pos:"er_pos_v3",theme:"er_theme_v1",font:"er_font_v3",
+};
+let known  = JSON.parse(localStorage.getItem(LS.known)  ||"{}");
+let texts  = JSON.parse(localStorage.getItem(LS.texts)  ||"[]");
+let scache = JSON.parse(localStorage.getItem(LS.scache) ||"{}");
+let pos    = JSON.parse(localStorage.getItem(LS.pos)    ||"{}");
+const save={
+  known: ()=>localStorage.setItem(LS.known, JSON.stringify(known)),
+  texts: ()=>localStorage.setItem(LS.texts, JSON.stringify(texts)),
+  scache:()=>localStorage.setItem(LS.scache,JSON.stringify(scache)),
+  pos:   ()=>localStorage.setItem(LS.pos,   JSON.stringify(pos)),
+};
+
+/* ══════════════════════════════════════════════════════════
+   УТИЛИТЫ
+══════════════════════════════════════════════════════════ */
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ══════════════════════════════════════════════════════════
+   ТЕМА
+══════════════════════════════════════════════════════════ */
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme",t);
+  localStorage.setItem(LS.theme,t);
+  const icon=t==="dark"?"☀️":"🌙";
+  ["themeBtn","themeBtn2","floatTheme"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=icon;});
+}
+function toggleTheme(){applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");}
+applyTheme(localStorage.getItem(LS.theme)||"light");
+document.getElementById("themeBtn").onclick=toggleTheme;
+document.getElementById("themeBtn2").onclick=toggleTheme;
+document.getElementById("floatTheme").onclick=toggleTheme;
+
+/* ══════════════════════════════════════════════════════════
+   ШРИФТ — сохраняем позицию при смене размера
+══════════════════════════════════════════════════════════ */
+let ruSize=parseInt(localStorage.getItem(LS.font)||"20",10);
+function applyFont(keepPos){
+  let si=null;
+  if(keepPos&&currentId){
+    // запомним какой sent-block сейчас виден
+    const blocks=document.querySelectorAll(".sent-block[data-si]");
+    for(const b of blocks){if(b.getBoundingClientRect().bottom>80){si=parseInt(b.dataset.si);break;}}
+  }
+  const card=document.getElementById("readingCard");
+  card.style.setProperty("--ru-size",ruSize+"px");
+  card.style.setProperty("--en-size",Math.round(ruSize*.63)+"px");
+  localStorage.setItem(LS.font,ruSize);
+  if(si!==null){
+    requestAnimationFrame(()=>{
+      const el=document.querySelector(`.sent-block[data-si="${si}"]`);
+      if(el)el.scrollIntoView({block:"start",behavior:"instant"});
+    });
+  }
+}
+function fontUp(){ruSize=Math.min(ruSize+2,36);applyFont(true);}
+function fontDown(){ruSize=Math.max(ruSize-2,12);applyFont(true);}
+document.getElementById("fontPlus").onclick=fontUp;
+document.getElementById("fontMinus").onclick=fontDown;
+document.getElementById("floatPlus").onclick=fontUp;
+document.getElementById("floatMinus").onclick=fontDown;
+
+/* ══════════════════════════════════════════════════════════
+   НАВИГАЦИЯ
+══════════════════════════════════════════════════════════ */
+let prevView="v-home";
+function showView(id){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  document.getElementById("floatBar").classList.toggle("visible",id==="v-reader");
+}
+function switchTab(name){
+  ["library","new","account"].forEach(n=>{
+    document.getElementById("tab-"+n).classList.toggle("active",n===name);
+    document.getElementById("tab-content-"+n).style.display=n===name?"block":"none";
+  });
+  if(name==="library")renderLibrary();
+// Автовкладка: пустая библиотека → "Новый текст"
+(function(){
+  const savedTexts = JSON.parse(localStorage.getItem("er_texts_v3")||"[]");
+  if(savedTexts.length === 0) switchTab("new");
+  // else остаётся "library" (активна по умолчанию в HTML)
+})();
+  if(name==="account")renderAuth();
+}
+function switchWordsTab(name){
+  ["list","stats"].forEach(n=>{
+    document.getElementById("wtab-"+n).classList.toggle("active",n===name);
+    document.getElementById("wtab-content-"+n).style.display=n===name?"block":"none";
+  });
+  if(name==="stats")renderStats();
+}
+document.getElementById("backBtn").onclick=()=>{saveScrollPos();showView("v-home");switchTab("library");};
+document.getElementById("floatBack").onclick=()=>{saveScrollPos();showView("v-home");switchTab("library");};
+document.getElementById("wordsBtn2").onclick=()=>{prevView="v-reader";renderWords();showView("v-words");};
+document.getElementById("floatWords").onclick=()=>{prevView="v-reader";renderWords();showView("v-words");};
+document.getElementById("closeWordsBtn").onclick=()=>showView(prevView);
+
+/* ══════════════════════════════════════════════════════════
+   СВАЙП ВЛЕВО = НАЗАД
+══════════════════════════════════════════════════════════ */
+let _tx=0,_ty=0;
+document.addEventListener("touchstart",e=>{_tx=e.changedTouches[0].clientX;_ty=e.changedTouches[0].clientY;},{passive:true});
+document.addEventListener("touchend",e=>{
+  if(!document.getElementById("v-reader").classList.contains("active"))return;
+  const dx=_tx-e.changedTouches[0].clientX;
+  const dy=Math.abs(e.changedTouches[0].clientY-_ty);
+  if(dx>70&&dy<50){saveScrollPos();showView("v-home");switchTab("library");}
+},{passive:true});
+
+/* ══════════════════════════════════════════════════════════
+   ПОЗИЦИЯ ЧТЕНИЯ
+══════════════════════════════════════════════════════════ */
+function saveScrollPos(){
+  if(!currentId)return;
+  const blocks=document.querySelectorAll(".sent-block[data-si]");
+  for(const b of blocks){
+    if(b.getBoundingClientRect().bottom>80){
+      pos[currentId]=parseInt(b.dataset.si);save.pos();break;
+    }
+  }
+}
+function restoreScrollPos(){
+  if(!currentId||pos[currentId]==null)return;
+  setTimeout(()=>{
+    const el=document.querySelector(`.sent-block[data-si="${pos[currentId]}"]`);
+    if(el)el.scrollIntoView({block:"start",behavior:"instant"});
+  },120);
+}
+let _scrollTimer=null;
+window.addEventListener("scroll",()=>{
+  if(!document.getElementById("v-reader").classList.contains("active"))return;
+  clearTimeout(_scrollTimer);_scrollTimer=setTimeout(saveScrollPos,400);
+},{passive:true});
+
+/* ══════════════════════════════════════════════════════════
+   ЗАГРУЗКА ФАЙЛА
+══════════════════════════════════════════════════════════ */
+document.getElementById("fileBtn").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  const name=file.name.toLowerCase();
+  try{
+    let text;
+    if(name.endsWith(".epub"))          text=await readEpub(file);
+    else if(name.endsWith(".pdf"))       text=await readPdf(file);
+    else if(name.endsWith(".html")||name.endsWith(".htm"))text=htmlToText(await readAsText(file));
+    else                                text=await readAsText(file);
+    document.getElementById("inputText").value=text;
+    switchTab("new");
+  }catch(err){alert("Не удалось прочитать файл: "+err.message);}
+  e.target.value="";
+};
+function readAsText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=()=>rej(new Error("read error"));r.readAsText(file,"UTF-8");});}
+function readAsBinary(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=()=>rej(new Error("read error"));r.readAsArrayBuffer(file);});}
+/* ── PDF: только text-based, без OCR ── */
+async function readPdf(file){
+  const buf = await readAsBinary(file);
+  const bytes = new Uint8Array(buf);
+  const str = new TextDecoder("latin1").decode(bytes);
+  const texts = [];
+  // Извлекаем текстовые блоки между BT...ET
+  let btIdx = 0;
+  while(true){
+    const btStart = str.indexOf("BT", btIdx);
+    if(btStart === -1) break;
+    const etEnd = str.indexOf("ET", btStart);
+    if(etEnd === -1) break;
+    const block = str.slice(btStart, etEnd + 2);
+    // Ищем (text) Tj паттерны
+    let pos = 0;
+    while(pos < block.length){
+      const p1 = block.indexOf("(", pos);
+      if(p1 === -1) break;
+      const p2 = block.indexOf(")", p1);
+      if(p2 === -1) break;
+      const chunk = block.slice(p1+1, p2)
+        .replace(/\\n/g," ").replace(/\\r/g,"")
+        .replace(/\\\\/g,"");
+      if(chunk.trim().length > 0) texts.push(chunk);
+      pos = p2 + 1;
+    }
+    btIdx = etEnd + 2;
+  }
+  if(!texts.length) throw new Error("Не удалось извлечь текст — PDF может быть сканированным.");
+  return texts.join(" ").replace(/ {2,}/g," ").trim();
+}
+
+async function readEpub(file){
+  if(typeof JSZip==="undefined")throw new Error("JSZip не загружен");
+  const buf=await readAsBinary(file);
+  const zip=await JSZip.loadAsync(buf);
+  const cxml=await zip.file("META-INF/container.xml").async("string");
+  const opfPath=cxml.match(/full-path="([^"]+\.opf)"/i)?.[1];
+  if(!opfPath)throw new Error("OPF не найден");
+  const opfXml=await zip.file(opfPath).async("string");
+  const opfDir=opfPath.includes("/")?opfPath.slice(0,opfPath.lastIndexOf("/")+1):"";
+  const manifest={};
+  const mRe=/<item\s[^>]*id="([^"]+)"[^>]*href="([^"]+)"[^>]*>/gi;let mm;
+  while((mm=mRe.exec(opfXml))!==null)manifest[mm[1]]=mm[2];
+  const spineIds=[];const sRe=/<itemref\s[^>]*idref="([^"]+)"/gi;let sm;
+  while((sm=sRe.exec(opfXml))!==null)spineIds.push(sm[1]);
+  const parts=[];
+  for(const id of spineIds){
+    const href=manifest[id];if(!href)continue;
+    const cf=zip.file(opfDir+href)||zip.file(href);if(!cf)continue;
+    const t=htmlToText(await cf.async("string"));
+    if(t.trim())parts.push(t.trim());
+  }
+  if(!parts.length)throw new Error("Текст не найден в epub");
+  return parts.join("\n\n");
+}
+function htmlToText(html){
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"")
+    .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>/gi,"\n").replace(/<\/div>/gi,"\n").replace(/<\/h[1-6]>/gi,"\n\n")
+    .replace(/<[^>]+>/g,"")
+    .replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+    .replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"')
+    .replace(/\u2014/g," — ").replace(/\u2013/g,"–")
+    .replace(/\n{3,}/g,"\n\n").trim();
+}
+
+/* ══════════════════════════════════════════════════════════
+   БИБЛИОТЕКА
+══════════════════════════════════════════════════════════ */
+function renderLibrary(){
+  const el=document.getElementById("library");
+  if(!texts.length){el.innerHTML=`<p style="color:var(--muted);font-size:14px;text-align:center;padding:30px 0;">Нет текстов — добавь первый</p>`;return;}
+  el.innerHTML="";
+  texts.slice().reverse().forEach(t=>{
+    const d=document.createElement("div");d.className="lib-item";
+    const wc=t.raw.split(/\s+/).filter(Boolean).length;
+    d.innerHTML=`
+      <div style="flex:1" onclick="openText('${t.id}')">
+        <div class="lib-title">${esc(t.title)}</div>
+        <div class="lib-sub">${wc} слов · ${new Date(t.createdAt).toLocaleDateString("ru-RU")}</div>
+      </div>
+      <button class="lib-del" onclick="deleteText(event,'${t.id}')">🗑</button>`;
+    el.appendChild(d);
+  });
+}
+function deleteText(e,id){
+  e.stopPropagation();
+  showConfirm("Удалить текст без возможности восстановления?",()=>{
+    texts=texts.filter(t=>t.id!==id);save.texts();delete pos[id];save.pos();renderLibrary();
+  });
+}
+renderLibrary();
+
+/* ══════════════════════════════════════════════════════════
+   СОЗДАНИЕ / ОТКРЫТИЕ ТЕКСТА
+══════════════════════════════════════════════════════════ */
+document.getElementById("buildBtn").onclick=()=>{
+  const raw=document.getElementById("inputText").value.trim();
+  if(!raw)return;
+  const title=raw.split(/\s+/).slice(0,6).join(" ")+"…";
+  const id="t"+Date.now();
+  texts.push({id,title,raw,createdAt:Date.now()});
+  save.texts();
+  document.getElementById("inputText").value="";
+  openText(id);
+};
+let currentId=null;
+function openText(id){
+  const t=texts.find(t=>t.id===id);if(!t)return;
+  currentId=id;showView("v-reader");applyFont(false);buildReader(t.raw);
+}
+document.getElementById("delBtn").onclick=()=>{
+  showConfirm("Удалить этот текст из памяти?",()=>{
+    texts=texts.filter(t=>t.id!==currentId);save.texts();delete pos[currentId];save.pos();
+    showView("v-home");switchTab("library");
+  });
+};
+
+/* ══════════════════════════════════════════════════════════
+   РАЗБИВКА ТЕКСТА: абзацы → предложения
+══════════════════════════════════════════════════════════ */
+const ABBR=/\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|a\.m|p\.m|U\.S|U\.K)\./g;
+const MARK="\u0001";
+function splitSentences(text){
+  const p=text.replace(ABBR,m=>m.replace(".",MARK)).replace(/(\d)\.(\d)/g,(_,a,b)=>a+MARK+b);
+  return(p.match(/[^.!?]*[.!?]+(?:["'\u201D)\]]*)|[^.!?]+$/gs)||[])
+    .map(s=>s.replaceAll(MARK,".")).filter(s=>s.trim());
+}
+// Разбиваем на абзацы (\n\n или \n как отдельный блок)
+function splitParagraphs(raw){
+  return raw.split(/\n\n+/).map(p=>p.trim()).filter(Boolean);
+}
+
+/* ══════════════════════════════════════════════════════════
+   ТОКЕНИЗАЦИЯ
+══════════════════════════════════════════════════════════ */
+function tokensEn(text){return text.match(/[A-Za-z']+|[^A-Za-z']+/g)||[];}
+function cleanWord(t){return t.toLowerCase().replace(/^'+|'+$/g,"");}
+function enWords(s){return tokensEn(s).filter(t=>/^[A-Za-z']+$/.test(t)).map(cleanWord).filter(Boolean);}
+
+/* ══════════════════════════════════════════════════════════
+   ПЕРЕВОД
+══════════════════════════════════════════════════════════ */
+async function fetchT(url){
+  const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),5000));
+  return Promise.race([fetch(url),timeout]);
+}
+async function trGoogle(t){
+  const r=await fetchT(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t&q=${encodeURIComponent(t)}`);
+  if(!r.ok)throw new Error("google "+r.status);
+  const d=await r.json();return d[0].map(x=>x[0]).join("");
+}
+async function trMyMemory(t){
+  const q=t.length>480?t.slice(0,480):t;
+  const r=await fetchT(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=en|ru`);
+  if(!r.ok)throw new Error("mymemory "+r.status);
+  const d=await r.json();
+  if(!d.responseData?.translatedText)throw new Error("empty");
+  return d.responseData.translatedText;
+}
+async function trLingva(t,host){
+  const r=await fetchT(`https://${host}/api/v1/en/ru/${encodeURIComponent(t)}`);
+  if(!r.ok)throw new Error("lingva "+r.status);
+  const d=await r.json();if(!d.translation)throw new Error("empty");return d.translation;
+}
+const TRANSLATORS=[t=>trGoogle(t),t=>trMyMemory(t),t=>trLingva(t,"lingva.ml"),t=>trLingva(t,"lingva.thedaviddelta.com")];
+let errShown=false;
+function showErr(msg){
+  if(errShown)return;errShown=true;
+  const b=document.createElement("div");b.className="err-banner";
+  b.textContent=msg||"⚠️ Переводчик недоступен — обнови страницу.";
+  document.body.appendChild(b);
+  setTimeout(()=>{b.remove();errShown=false;},9000);
+}
+async function translate(text){
+  if(scache[text]!==undefined)return scache[text];
+  const trimmed=text.trim();
+  if(!trimmed||!enWords(trimmed).length){scache[text]=text;return text;}
+  for(let i=0;i<TRANSLATORS.length;i++){
+    try{const ru=await TRANSLATORS[i](trimmed);scache[text]=ru;save.scache();return ru;}
+    catch(e){console.warn("tr"+(i+1)+":",e.message);if(i<TRANSLATORS.length-1)await sleep(500);}
+  }
+  showErr("⚠️ Переводчик недоступен. Обнови страницу через минуту.");
+  return text;
+}
+
+/* ══════════════════════════════════════════════════════════
+   РИДЕР — модель данных
+══════════════════════════════════════════════════════════ */
+// Структура: [{type:"para", sentences:[{raw,words}]}]
+let blocks=[];
+
+function buildReader(raw){
+  const paras=splitParagraphs(raw);
+  blocks=paras.map(para=>{
+    const sents=splitSentences(para).map(s=>({raw:s,words:enWords(s)}));
+    return{type:"para",sentences:sents};
+  });
+  renderReader();
+  hydrate().then(()=>{
+  restoreScrollPos();
+  // Сохраняем чанки в Supabase (пассивно, не блокирует)
+  if(currentId){
+    const t = texts.find(t=>t.id===currentId);
+    if(t) saveChunksToSupabase(currentId, t.raw);
+  }
+});
+}
+
+let _globalSi=0; // глобальный счётчик sentence index для data-si
+function renderReader(){
+  const card=document.getElementById("readingCard");
+  let html="";let total=0;let knownCount=0;
+  _globalSi=0;
+  for(const block of blocks){
+    html+=`<div class="para-block">`;
+    for(const sent of block.sentences){
+      const si=_globalSi++;
+      const ws=sent.words;
+      total+=ws.length;
+      const kn=ws.filter(w=>known[w]).length;
+      knownCount+=kn;
+      const full=ws.length>0&&kn===ws.length;
+      const ru=scache[sent.raw];
+      const ruLine=ru!==undefined
+        ?`<div class="ru-line">${esc(ru)}</div>`
+        :`<div class="ru-line" style="color:var(--muted);font-style:italic;font-size:13px">переводится…</div>`;
+      let enHtml="";
+      tokensEn(sent.raw).forEach(tok=>{
+        if(!/^[A-Za-z']+$/.test(tok)){enHtml+=esc(tok);return;}
+        const w=cleanWord(tok);
+        const isK=!!known[w];
+        enHtml+=`<span class="ew${isK?" known":""}" onclick="toggleWord('${w.replace(/'/g,"\\'")}')">${esc(tok)}</span>`;
+      });
+      html+=`<div class="sent-block${full?" fully-known":""}" data-si="${si}">${full?"":ruLine}<div class="en-line">${enHtml}</div></div>`;
+    }
+    html+="</div>";
+  }
+  card.innerHTML=html;
+  updateProgress(total,knownCount);
+}
+
+let _lastShownPct = -1;
+function updateProgress(total,kn){
+  const pct=total?Math.round(kn/total*100):0;
+  document.getElementById("progFill").style.width=pct+"%";
+  document.getElementById("progTxt").textContent=pct+"% слов известно";
+  document.getElementById("progCount").textContent=`${kn} / ${total}`;
+}
+
+function showChapterStats(newWords, familiarWords){
+  // Компактный блок — 5 секунд, не мешает чтению
+  const existing = document.getElementById("chapterStats");
+  if(existing) existing.remove();
+  const el = document.createElement("div");
+  el.id = "chapterStats";
+  el.className = "chapter-stats";
+  el.innerHTML = `
+    <div style="text-align:center;">
+      <div class="cs-num" style="color:var(--accent)">${newWords}</div>
+      <div class="cs-lbl">новых слов</div>
+    </div>
+    <div style="width:1px;background:var(--border);height:30px;"></div>
+    <div style="text-align:center;">
+      <div class="cs-num" style="color:var(--muted)">${familiarWords}</div>
+      <div class="cs-lbl">знакомых</div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.remove(); }, 5000);
+  el.onclick = () => el.remove();
+}
+
+async function hydrate(){
+  const allSents=blocks.flatMap(b=>b.sentences);
+  const todo=allSents.filter(s=>scache[s.raw]===undefined&&s.words.length>0);
+  const BATCH=5;
+  for(let i=0;i<todo.length;i+=BATCH){
+    await Promise.all(todo.slice(i,i+BATCH).map(s=>translate(s.raw)));
+    renderReader();
+  }
+  // Статистика главы после загрузки (только при первом открытии текста)
+  const allWords = blocks.flatMap(b=>b.sentences).flatMap(s=>s.words);
+  const familiar = allWords.filter(w=>known[w]).length;
+  const newW = allWords.filter(w=>!known[w]).length;
+  if(allWords.length > 10) showChapterStats(newW, familiar);
+}
+
+/* ══════════════════════════════════════════════════════════
+   КЛИК ПО СЛОВУ
+══════════════════════════════════════════════════════════ */
+function toggleWord(word){
+  if(known[word])delete known[word];else known[word]=true;
+  save.known();renderReader();
+}
+
+/* ══════════════════════════════════════════════════════════
+   СЛОВАРЬ — список
+══════════════════════════════════════════════════════════ */
+function renderWords(){
+  const list=Object.keys(known).sort();
+  document.getElementById("wordsCount").textContent=list.length+" слов известно";
+  const c=document.getElementById("wordsList");
+  if(!list.length){c.innerHTML=`<p style="color:var(--muted);font-size:14px">Кликай на английские слова во время чтения.</p>`;return;}
+  c.innerHTML=list.map(w=>`<span class="word-chip">${esc(w)}<button onclick="forgetWord('${w.replace(/'/g,"\\'")}')">✕</button></span>`).join("");
+}
+function forgetWord(w){
+  delete known[w];save.known();renderWords();
+  if(document.getElementById("v-reader").classList.contains("active"))renderReader();
+}
+
+// Экспорт
+document.getElementById("exportBtn").onclick=()=>{
+  const data=JSON.stringify({version:1,exported:new Date().toISOString(),words:Object.keys(known)},null,2);
+  const a=document.createElement("a");
+  a.href="data:application/json;charset=utf-8,"+encodeURIComponent(data);
+  a.download="english-reader-dictionary.json";a.click();
+};
+// Импорт
+document.getElementById("importBtn").onclick=()=>document.getElementById("importInput").click();
+document.getElementById("importInput").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const data=JSON.parse(await readAsText(file));
+    const words=Array.isArray(data.words)?data.words:Object.keys(data);
+    let added=0;
+    words.forEach(w=>{if(typeof w==="string"&&!known[w]){known[w]=true;added++;}});
+    save.known();renderWords();
+    alert(`Добавлено ${added} новых слов. Итого: ${Object.keys(known).length}`);
+  }catch(err){alert("Ошибка импорта: "+err.message);}
+  e.target.value="";
+};
+
+/* ══════════════════════════════════════════════════════════
+   СТАТИСТИКА И ПРОГРЕСС
+   Оценка уровня по частотным диапазонам:
+   A1-A2: первые ~1000 самых частых слов английского
+   B1-B2: 1001-4000
+   C1+:   4001+
+   (имена собственные — начинаются с заглавной буквы в тексте —
+    статистику искажают, поэтому фильтруем при оценке уровня)
+══════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════
+   ЧАСТОТНЫЙ СЛОВАРЬ CEFR (A1→C2)
+   Источник: Oxford/Cambridge публичные частотные данные.
+   Слова в нижнем регистре. Уровень определяет,
+   насколько "редким" считается слово.
+══════════════════════════════════════════════════════════ */
+const FREQ={"when":"A1","its":"A1","new":"A1","now":"A1","not":"A1","for":"A1","an":"A1","any":"A1","the":"A1","day":"A1","while":"A1","up":"A1","good":"A1","be":"A1","to":"A1","of":"A1","and":"A1","a":"A1","in":"A1","that":"A1","have":"A1","it":"A1","on":"A1","with":"A1","he":"A1","as":"A1","you":"A1","do":"A1","at":"A1","this":"A1","his":"A1","by":"A1","from":"A1","they":"A1","we":"A1","say":"A1","her":"A1","she":"A1","or":"A1","will":"A1","my":"A1","one":"A1","all":"A1","would":"A1","there":"A1","their":"A1","what":"A1","so":"A1","out":"A1","if":"A1","about":"A1","who":"A1","get":"A1","which":"A1","go":"A1","me":"A1","make":"A1","can":"A1","like":"A1","time":"A1","no":"A1","just":"A1","him":"A1","know":"A1","take":"A1","people":"A1","into":"A1","year":"A1","your":"A1","some":"A1","could":"A1","them":"A1","see":"A1","than":"A1","then":"A1","look":"A1","only":"A1","come":"A1","over":"A1","think":"A1","also":"A1","back":"A1","after":"A1","use":"A1","two":"A1","how":"A1","our":"A1","work":"A1","first":"A1","well":"A1","way":"A1","even":"A2","want":"A1","because":"A1","give":"A1","most":"A1","us":"A1","long":"A1","big":"A1","down":"A1","did":"A1","get":"A1","has":"A1","may":"A1","had":"A1","but":"A1","been":"A1","who":"A1","too":"A1","its":"A1","him":"A1","old":"A1","see":"A1","let":"A1","put":"A1","end":"A1","why":"A1","try":"A1","ask":"A1","too":"A1","few":"A1","new":"A1","own":"A1","say":"A1","got":"A1","man":"A1","did":"A1","set":"A1","run":"A1","eat":"A1","far":"A1","sea":"A1","red":"A1","hot":"A1","boy":"A1","top":"A1","got":"A1","sun":"A1","big":"A1","air":"A1","ago":"A2","yes":"A1","yet":"A1","age":"A2","act":"A2","add":"A2","away":"A2","bad":"A2","base":"A2","before":"A2","begin":"A2","best":"A2","better":"A2","between":"A2","black":"A2","body":"A2","book":"A2","both":"A2","bring":"A2","build":"A2","business":"A2","call":"A2","care":"A2","carry":"A2","change":"A2","child":"A2","city":"A2","clear":"A2","close":"A2","cold":"A2","company":"A2","complete":"A2","cost":"A2","country":"A2","cut":"A2","dark":"A2","deal":"A2","decide":"A2","different":"A2","difficult":"A2","door":"A2","draw":"A2","drive":"A2","early":"A2","easy":"A2","education":"A2","enjoy":"A2","enough":"A2","every":"A2","example":"A2","face":"A2","fact":"A2","fall":"A2","family":"A2","fast":"A2","feel":"A2","find":"A2","fire":"A2","food":"A2","follow":"A2","friend":"A2","full":"A2","game":"A2","girl":"A2","glass":"A2","great":"A2","green":"A2","group":"A2","grow":"A2","half":"A2","happen":"A2","head":"A2","health":"A2","hear":"A2","heart":"A2","help":"A2","high":"A2","hold":"A2","home":"A2","hope":"A2","hour":"A2","human":"A2","idea":"A2","important":"A2","keep":"A2","kind":"A2","large":"A2","last":"A2","laugh":"A2","lead":"A2","learn":"A2","less":"A2","level":"A2","life":"A2","light":"A2","list":"A2","live":"A2","local":"A2","love":"A2","low":"A2","mean":"A2","meet":"A2","mind":"A2","miss":"A2","money":"A2","move":"A2","much":"A2","music":"A2","near":"A2","never":"A2","next":"A2","nice":"A2","north":"A2","nothing":"A2","number":"A2","open":"A2","page":"A2","part":"A2","past":"A2","person":"A2","phone":"A2","picture":"A2","plan":"A2","play":"A2","point":"A2","poor":"A2","popular":"A2","power":"A2","present":"A2","pretty":"A2","price":"A2","problem":"A2","pull":"A2","push":"A2","question":"A2","quick":"A2","read":"A2","ready":"A2","real":"A2","remember":"A2","road":"A2","room":"A2","send":"A2","sense":"A2","show":"A2","simple":"A2","sit":"A2","size":"A2","small":"A2","smile":"A2","speak":"A2","stand":"A2","start":"A2","stay":"A2","step":"A2","study":"A2","suddenly":"A2","sure":"A2","talk":"A2","tall":"A2","tell":"A2","town":"A2","true":"A2","turn":"A2","understand":"A2","usually":"A2","visit":"A2","voice":"A2","wait":"A2","walk":"A2","wall":"A2","water":"A2","wide":"A2","wish":"A2","write":"A2","young":"A2","white":"A2","today":"A2","together":"A2","three":"A2","night":"A2","world":"A2","place":"A2","thing":"A2","think":"A2","those":"A2","these":"A2","still":"A2","right":"A2","other":"A2","often":"A2","might":"A2","light":"A2","house":"A2","every":"A2","earth":"A2","color":"A2","below":"A2","above":"A2","again":"A2","alone":"A2","along":"A2","among":"A2","answer":"A2","area":"A2","around":"A2","base":"A2","been":"A2","bit":"A2","blue":"A2","book":"A2","born":"A2","case":"A2","class":"A2","come":"A2","cover":"A2","each":"A2","else":"A2","ever":"A2","form":"A2","free":"A2","from":"A2","front":"A2","given":"A2","gone":"A2","hair":"A2","hand":"A2","hard":"A2","have":"A2","here":"A2","kind":"A2","late":"A2","left":"A2","line":"A2","live":"A2","long":"A2","look":"A2","made":"A2","make":"A2","many":"A2","mark":"A2","mind":"A2","mine":"A2","more":"A2","most":"A2","move":"A2","much":"A2","must":"A2","name":"A2","need":"A2","note":"A2","noun":"A2","once":"A2","only":"A2","open":"A2","over":"A2","same":"A2","seat":"A2","self":"A2","sent":"A2","side":"A2","some":"A2","soon":"A2","sort":"A2","such":"A2","take":"A2","than":"A2","that":"A2","them":"A2","then":"A2","this":"A2","time":"A2","told":"A2","took":"A2","tree":"A2","upon":"A2","used":"A2","very":"A2","view":"A2","week":"A2","went":"A2","were":"A2","what":"A2","when":"A2","whom":"A2","will":"A2","wind":"A2","with":"A2","word":"A2","work":"A2","year":"A2","your":"A2","abandon":"B1","ability":"B1","able":"B1","abroad":"B1","absence":"B1","academic":"B1","accept":"B1","access":"B1","accomplish":"B1","achieve":"B1","acquire":"B1","activity":"B1","adapt":"B1","address":"B1","administration":"B1","advance":"B1","advantage":"B1","affect":"B1","afford":"B1","agent":"B1","agree":"B1","agreement":"B1","agriculture":"B1","ahead":"B1","aim":"B1","aircraft":"B1","airport":"B1","allow":"B1","although":"B1","annual":"B1","apart":"B1","appeal":"B1","apply":"B1","appointment":"B1","approach":"B1","appropriate":"B1","approval":"B1","argue":"B1","arrest":"B1","aspect":"B1","assess":"B1","assist":"B1","assume":"B1","atmosphere":"B1","attempt":"B1","attend":"B1","attitude":"B1","authority":"B1","aware":"B1","background":"B1","balance":"B1","benefit":"B1","border":"B1","broad":"B1","budget":"B1","campaign":"B1","capable":"B1","capacity":"B1","capture":"B1","cause":"B1","challenge":"B1","characteristic":"B1","charge":"B1","chemical":"B1","colleague":"B1","combine":"B1","commit":"B1","communicate":"B1","competition":"B1","complex":"B1","concept":"B1","concern":"B1","conclude":"B1","condition":"B1","confident":"B1","connect":"B1","consider":"B1","consist":"B1","constant":"B1","construct":"B1","contribute":"B1","council":"B1","couple":"B1","create":"B1","crime":"B1","culture":"B1","currency":"B1","current":"B1","cycle":"B1","debate":"B1","declare":"B1","deep":"B1","define":"B1","degree":"B1","deliver":"B1","depend":"B1","desire":"B1","despite":"B1","detail":"B1","determine":"B1","develop":"B1","dialogue":"B1","discover":"B1","document":"B1","doubt":"B1","economic":"B1","effective":"B1","efficient":"B1","elect":"B1","emerge":"B1","emotion":"B1","employ":"B1","encourage":"B1","enormous":"B1","environment":"B1","equal":"B1","essential":"B1","establish":"B1","estimate":"B1","event":"B1","evidence":"B1","examine":"B1","exchange":"B1","exercise":"B1","exist":"B1","expect":"B1","experiment":"B1","expert":"B1","explain":"B1","express":"B1","extension":"B1","factor":"B1","fail":"B1","familiar":"B1","feature":"B1","finance":"B1","flexible":"B1","focus":"B1","forward":"B1","fund":"B1","fundamental":"B1","global":"B1","govern":"B1","guarantee":"B1","guide":"B1","huge":"B1","identify":"B1","ignore":"B1","impact":"B1","implement":"B1","improve":"B1","income":"B1","indicate":"B1","individual":"B1","industry":"B1","influence":"B1","inform":"B1","initial":"B1","input":"B1","investigate":"B1","investment":"B1","issue":"B1","join":"B1","judge":"B1","label":"B1","labour":"B1","launch":"B1","leadership":"B1","legal":"B1","literature":"B1","location":"B1","logic":"B1","maintain":"B1","manage":"B1","mass":"B1","measure":"B1","media":"B1","monitor":"B1","motivation":"B1","obtain":"B1","operate":"B1","opportunity":"B1","option":"B1","organize":"B1","outcome":"B1","overcome":"B1","participate":"B1","pattern":"B1","performance":"B1","persuade":"B1","policy":"B1","political":"B1","potential":"B1","process":"B1","professional":"B1","promote":"B1","protect":"B1","publish":"B1","raise":"B1","range":"B1","rapid":"B1","react":"B1","relate":"B1","release":"B1","relevant":"B1","remove":"B1","represent":"B1","research":"B1","resource":"B1","respond":"B1","responsible":"B1","reveal":"B1","review":"B1","role":"B1","rule":"B1","safety":"B1","seek":"B1","selection":"B1","separate":"B1","series":"B1","significant":"B1","skill":"B1","social":"B1","solve":"B1","specific":"B1","standard":"B1","strategy":"B1","stress":"B1","structure":"B1","successful":"B1","suggest":"B1","supply":"B1","support":"B1","survey":"B1","survive":"B1","system":"B1","task":"B1","throughout":"B1","transfer":"B1","transport":"B1","trend":"B1","trust":"B1","unique":"B1","urban":"B1","variety":"B1","various":"B1","vehicle":"B1","version":"B1","vital":"B1","volume":"B1","welfare":"B1","whereas":"B1","widespread":"B1","abstract":"B2","accommodate":"B2","accumulate":"B2","accurate":"B2","acknowledge":"B2","adequate":"B2","adjacent":"B2","advocate":"B2","aggregate":"B2","ambiguous":"B2","analyse":"B2","apparent":"B2","appreciate":"B2","arbitrary":"B2","assign":"B2","attribute":"B2","capable":"B2","cease":"B2","channel":"B2","circumstance":"B2","clarify":"B2","cognitive":"B2","coherent":"B2","comprehensive":"B2","compromise":"B2","concede":"B2","consistent":"B2","constitute":"B2","constraint":"B2","controversial":"B2","coordinate":"B2","correlate":"B2","criteria":"B2","crucial":"B2","deduce":"B2","demonstrate":"B2","derive":"B2","diminish":"B2","discriminate":"B2","distinct":"B2","diverse":"B2","domain":"B2","elaborate":"B2","eliminate":"B2","emphasis":"B2","empirical":"B2","encounter":"B2","enhance":"B2","equivalent":"B2","evaluate":"B2","exclude":"B2","explicit":"B2","facilitate":"B2","formulate":"B2","framework":"B2","hence":"B2","hierarchical":"B2","hypothetical":"B2","identical":"B2","imply":"B2","inherent":"B2","initiate":"B2","integrate":"B2","interpret":"B2","intervene":"B2","justify":"B2","liberal":"B2","logical":"B2","marginal":"B2","modify":"B2","mutual":"B2","negate":"B2","neutral":"B2","objective":"B2","optimal":"B2","override":"B2","perspective":"B2","phase":"B2","phenomenon":"B2","plausible":"B2","precedent":"B2","precise":"B2","premise":"B2","protocol":"B2","refine":"B2","reluctant":"B2","resolve":"B2","restrict":"B2","revise":"B2","rigorous":"B2","scope":"B2","simulate":"B2","sufficient":"B2","supplement":"B2","theoretical":"B2","thereby":"B2","transition":"B2","ultimate":"B2","undermine":"B2","validity":"B2","variable":"B2","aberrant":"C1","abrogate":"C1","abstain":"C1","acrimonious":"C1","adjudicate":"C1","ambivalent":"C1","ameliorate":"C1","anachronistic":"C1","analogous":"C1","articulate":"C1","assimilate":"C1","attenuate":"C1","augment":"C1","autonomous":"C1","benchmark":"C1","bureaucratic":"C1","capricious":"C1","cogent":"C1","cohesive":"C1","commensurate":"C1","conciliatory":"C1","contemplate":"C1","contentious":"C1","contingent":"C1","contradictory":"C1","corroborate":"C1","credible":"C1","culminate":"C1","debilitate":"C1","delineate":"C1","deprecate":"C1","derivative":"C1","dichotomy":"C1","differentiate":"C1","discrepancy":"C1","disseminate":"C1","dogmatic":"C1","dubious":"C1","efficacious":"C1","eloquent":"C1","enumerate":"C1","equivocal":"C1","eradicate":"C1","exacerbate":"C1","expedient":"C1","extraneous":"C1","fabricate":"C1","fallacious":"C1","feasible":"C1","fluctuate":"C1","formidable":"C1","fragmented":"C1","gratuitous":"C1","holistic":"C1","hypocritical":"C1","imperceptible":"C1","implicit":"C1","incongruous":"C1","indeterminate":"C1","innovative":"C1","jeopardize":"C1","juxtapose":"C1","lucid":"C1","meticulous":"C1","mitigate":"C1","negligible":"C1","nuanced":"C1","obsolete":"C1","ostensibly":"C1","paradox":"C1","paramount":"C1","plethora":"C1","pragmatic":"C1","preclude":"C1","prevalent":"C1","proactive":"C1","proliferate":"C1","reconcile":"C1","redundant":"C1","reinforce":"C1","repudiate":"C1","rhetoric":"C1","scrutinize":"C1","sophisticated":"C1","speculative":"C1","stringent":"C1","subjective":"C1","substantiate":"C1","superficial":"C1","susceptible":"C1","tenacious":"C1","ubiquitous":"C1","unprecedented":"C1","verbose":"C1","vulnerable":"C1","abstruse":"C2","acrimony":"C2","acuity":"C2","antithetical":"C2","apocryphal":"C2","arcane":"C2","assiduous":"C2","attrition":"C2","bellicose":"C2","byzantine":"C2","chicanery":"C2","circumlocution":"C2","clandestine":"C2","coalesce":"C2","cognizant":"C2","complacency":"C2","convoluted":"C2","culpable":"C2","dearth":"C2","demagogue":"C2","disingenuous":"C2","duplicity":"C2","dystopian":"C2","ebullient":"C2","equanimity":"C2","esoteric":"C2","exigent":"C2","extricate":"C2","facetious":"C2","fastidious":"C2","garrulous":"C2","grandiloquent":"C2","hegemony":"C2","iconoclast":"C2","idiosyncratic":"C2","impervious":"C2","impetuous":"C2","ineffable":"C2","insidious":"C2","intransigent":"C2","jejune":"C2","laconic":"C2","loquacious":"C2","machiavellian":"C2","malleable":"C2","mendacious":"C2","meretricious":"C2","misanthrope":"C2","narcissism":"C2","nefarious":"C2","nihilistic":"C2","obfuscate":"C2","obtuse":"C2","onerous":"C2","ostentatious":"C2","panacea":"C2","pedantic":"C2","penurious":"C2","perfidious":"C2","pernicious":"C2","perspicacious":"C2","pertinacious":"C2","platitude":"C2","polemical":"C2","prevaricate":"C2","proclivity":"C2","pugnacious":"C2","recalcitrant":"C2","reticent":"C2","sanguine":"C2","sardonic":"C2","sycophant":"C2","taciturn":"C2","tendentious":"C2","truculent":"C2","turpitude":"C2","vacuous":"C2","venal":"C2","vicarious":"C2","vindictive":"C2","vitriolic":"C2","vociferous":"C2"};
+
+function renderStats(){
+  const allWords = Object.keys(known);
+  const total = allWords.length;
+  const el = document.getElementById("statsContent");
+
+  // ── Карточка словаря ──
+  const dictCard = `
+    <div style="text-align:center;padding:24px 16px 16px;">
+      <div style="font-size:56px;font-weight:800;color:var(--accent);line-height:1;">${total}</div>
+      <div style="font-size:15px;color:var(--muted);margin-top:6px;">слов в твоём словаре</div>
+    </div>`;
+
+  if(total === 0){
+    el.innerHTML = dictCard + `
+      <div style="text-align:center;padding:0 16px 24px;">
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;">
+          Читай и отмечай слова —<br>здесь появится статистика
+        </p>
+      </div>`;
+    return;
+  }
+
+  // ── "Полезно выучить" — топ-20 частых слов текущего текста, которых нет в словаре ──
+  // Stop words — исключаем из рекомендаций
+  const STOP = new Set("the be to of and a in that have it for not on with he as you do at this his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take into your some could them see than then now look only come over think also back after use two how our work first well way even want because any give most us been did has had but too old let put end why try ask few own got man set run eat far hot boy top sun big air yes yet may will its".split(" "));
+
+  let topWords = [];
+  if(currentId){
+    const t = texts.find(t=>t.id===currentId);
+    if(t){
+      const freq = {};
+      // токенизируем текущий текст
+      const tokens = t.raw.match(/[a-zA-Z']+/g) || [];
+      tokens.forEach(tok => {
+        const w = tok.toLowerCase().replace(/^\'+|\'+$/g,"");
+        if(w.length < 3) return;
+        if(STOP.has(w)) return;
+        // исключаем вероятные имена собственные (первая буква заглавная в оригинале)
+        if(/^[A-Z]/.test(tok) && !STOP.has(w)) return;
+        if(known[w]) return; // уже знаем
+        freq[w] = (freq[w]||0) + 1;
+      });
+      topWords = Object.entries(freq)
+        .filter(([w,c]) => c >= 2)
+        .sort((a,b) => b[1]-a[1])
+        .slice(0,20);
+    }
+  }
+
+  const topWordsHTML = topWords.length ? `
+    <div style="margin-top:4px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;padding:0 2px;">
+        💡 Полезно выучить — встречаются в этом тексте
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${topWords.map(([w,c])=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;">
+            <span style="font-size:15px;font-weight:600;">${esc(w)}</span>
+            <span style="font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:3px 8px;">${c}×</span>
+          </div>`).join("")}
+      </div>
+    </div>` : (currentId ? `
+    <div style="padding:12px;background:var(--bg);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;">
+      Все частые слова этого текста уже в словаре 🎉
+    </div>` : `
+    <div style="padding:12px;background:var(--bg);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;">
+      Открой текст для чтения — покажем слова, которые стоит выучить
+    </div>`);
+
+  // ── Кнопка открыть полный словарь ──
+  const dictBtn = `
+    <div style="margin-top:16px;">
+      <button class="btn btn-secondary" style="width:100%;" onclick="switchWordsTab('list')">
+        Открыть полный словарь (${total} слов)
+      </button>
+    </div>`;
+
+  el.innerHTML = dictCard + topWordsHTML + dictBtn;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SUPABASE AUTH (заготовка)
+══════════════════════════════════════════════════════════ */
+function renderAuth(){
+  const section=document.getElementById("auth-section");
+  if(!SUPABASE_URL){
+    section.innerHTML=`<div class="card auth-card">
+      <p>Для синхронизации словаря через облако — добавь URL своего Supabase проекта в код (константа SUPABASE_URL).</p>
+      <p style="font-size:11px;color:var(--muted)">Settings → API → Project URL</p>
+    </div>`;
+    return;
+  }
+  // Инициализируем Supabase один раз
+  if(!sb) sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+  sb.auth.getUser().then(({data:{user}})=>{
+    if(user){
+      section.innerHTML=`<div class="card auth-card">
+        <p>Вошла как <b>${esc(user.email)}</b></p>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Словарь синхронизируется с облаком (TODO: настроить таблицы в Supabase)</p>
+        <button class="btn btn-secondary" onclick="signOut()">Выйти</button>
+      </div>`;
+    } else {
+      section.innerHTML=`<div class="card auth-card">
+        <p>Войди чтобы синхронизировать словарь между устройствами</p>
+        <input class="auth-input" id="authEmail" type="email" placeholder="Email">
+        <input class="auth-input" id="authPass" type="password" placeholder="Пароль">
+        <div class="row">
+          <button class="btn btn-primary" onclick="signIn()">Войти</button>
+          <button class="btn btn-secondary" onclick="signUp()">Регистрация</button>
+        </div>
+        <div class="auth-msg" id="authMsg"></div>
+      </div>`;
+    }
+  });
+}
+async function signIn(){
+  const email=document.getElementById("authEmail").value;
+  const pass=document.getElementById("authPass").value;
+  const msg=document.getElementById("authMsg");
+  msg.textContent="Входим…";
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){msg.textContent="Ошибка: "+error.message;}else{renderAuth();}
+}
+async function signUp(){
+  const email=document.getElementById("authEmail").value;
+  const pass=document.getElementById("authPass").value;
+  const msg=document.getElementById("authMsg");
+  msg.textContent="Регистрируем…";
+  const{error}=await sb.auth.signUp({email,password:pass});
+  if(error){msg.textContent="Ошибка: "+error.message;}
+  else{msg.textContent="Проверь email для подтверждения";}
+}
+async function signOut(){
+  await sb.auth.signOut();renderAuth();
+}
+
+/* ══════════════════════════════════════════════════════════
+   МОДАЛКА
+══════════════════════════════════════════════════════════ */
+function showConfirm(msg,onOk){
+  const ov=document.createElement("div");ov.className="modal-overlay";
+  ov.innerHTML=`<div class="modal-box"><p>${esc(msg)}</p><div class="modal-row">
+    <button class="btn btn-secondary" style="flex:1" id="_mC">Отмена</button>
+    <button class="btn" style="flex:1;background:#c0392b;color:#fff" id="_mO">Удалить</button>
+  </div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#_mC").onclick=()=>ov.remove();
+  ov.querySelector("#_mO").onclick=()=>{ov.remove();onOk();};
+}
+</script>
+</body>
+</html>
