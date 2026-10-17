@@ -18,12 +18,19 @@
         </header>
 
         <!-- Главный экран: Библиотека и Загрузка -->
+        <!-- Главный экран: Библиотека и Загрузка -->
         <div id="library-view">
             <div class="bg-zinc-800 p-4 rounded-xl shadow mb-6 border border-zinc-700">
                 <h2 class="text-sm font-semibold mb-2">Загрузить EPUB книгу</h2>
-                <input type="file" id="epub-input" accept=".epub" class="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
+                <input type="file" id="epub-input" accept=".epub,application/epub+zip,application/x-mobipocket-ebook,*/*" class="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
                 <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Распаковка и сохранение книги...</p>
             </div>
+
+            <h2 class="text-lg font-semibold mb-3">Ваша библиотека</h2>
+            <div id="books-list" class="space-y-2">
+                <!-- Список книг подгрузится динамически -->
+            </div>
+        </div>
 
             <h2 class="text-lg font-semibold mb-3">Ваша библиотека</h2>
             <div id="books-list" class="space-y-2">
