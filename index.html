@@ -2,84 +2,162 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dofus Reader (MVP)</title>
-    <!-- Подключаем Tailwind для быстрого и красивого интерфейса -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dofus Reader</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Подключаем Dexie.js (IndexedDB) и JSZip для распаковки EPUB прямо в браузере -->
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        .theme-dark { background-color: #121212; color: #e0e0e0; }
+        .theme-dark .card { background-color: #1e1e1e; border-color: #333; }
+        .theme-light { background-color: #f8f9fa; color: #1a1a1a; }
+        .theme-light .card { background-color: #ffffff; border-color: #e5e7eb; }
+        .theme-sepia { background-color: #f4ecd8; color: #433422; }
+        .theme-sepia .card { background-color: #eae0c8; border-color: #d8ccb0; }
+        
+        .word { cursor: pointer; border-radius: 2px; padding: 0 1px; transition: background 0.15s; }
+        .word-known { color: #22c55e; font-weight: 500; }
+        .word:active { background-color: rgba(234, 179, 8, 0.3); }
+        .sentence-block { margin-bottom: 1.25rem; }
+        .translation-text { font-size: 0.9em; margin-bottom: 0.25rem; opacity: 0.85; line-height: 1.4; }
+        .original-text { line-height: 1.6; }
+    </style>
 </head>
-<body class="bg-zinc-900 text-zinc-100 min-h-screen p-4">
-    <div id="app" class="max-w-2xl mx-auto">
-        <header class="mb-6">
-            <h1 class="text-2xl font-bold text-amber-500">Dofus Reader</h1>
-            <p class="text-xs text-zinc-400">Читай легко, учи слова</p>
-        </header>
+<body class="theme-dark min-h-screen flex flex-col font-sans antialiased select-none">
 
-        <!-- Главный экран: Библиотека и Загрузка -->
-        <!-- Главный экран: Библиотека и Загрузка -->
-        <div id="library-view">
-            <div class="bg-zinc-800 p-4 rounded-xl shadow mb-6 border border-zinc-700">
-                <h2 class="text-sm font-semibold mb-2">Загрузить EPUB книгу</h2>
-                <input type="file" id="epub-input" accept=".epub,application/epub+zip,application/x-mobipocket-ebook,*/*" class="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
-                <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Распаковка и сохранение книги...</p>
+    <!-- Приложение -->
+    <div id="app" class="flex-1 flex flex-col max-w-3xl w-full mx-auto px-3 py-2">
+
+        <!-- ================= ЭКРАН 1: БИБЛИОТЕКА И НАСТРОЙКИ ================= -->
+        <div id="library-view" class="space-y-4">
+            <header class="flex justify-between items-center py-2 border-b border-zinc-700">
+                <h1 class="text-xl font-bold text-amber-500">Dofus Reader</h1>
+                <span id="dict-stats" class="text-xs text-zinc-400">Словарь: 0 слов</span>
+            </header>
+
+            <!-- Импорт книги -->
+            <div class="card p-3 rounded-xl border">
+                <h2 class="text-xs font-semibold mb-2 uppercase tracking-wider text-zinc-400">Загрузка EPUB</h2>
+                <input type="file" id="epub-input" accept=".epub,application/epub+zip,application/x-mobipocket-ebook,*/*" class="block w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
+                <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Обработка и распаковка файла...</p>
             </div>
 
-            <h2 class="text-lg font-semibold mb-3">Ваша библиотека</h2>
-            <div id="books-list" class="space-y-2">
-                <!-- Список книг подгрузится динамически -->
+            <!-- Импорт пользовательского словаря -->
+            <div class="card p-3 rounded-xl border">
+                <h2 class="text-xs font-semibold mb-1 uppercase tracking-wider text-zinc-400">Импорт вашего словаря</h2>
+                <p class="text-xs text-zinc-400 mb-2">Вставьте слова через запятую или с новой строки:</p>
+                <textarea id="dict-import-text" rows="3" class="w-full text-xs p-2 rounded bg-zinc-900 border border-zinc-700 text-zinc-200 mb-2" placeholder="know, running, book, house..."></textarea>
+                <button onclick="importUserDictionary()" class="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition">Добавить слова в словарь</button>
+            </div>
+
+            <!-- Список книг -->
+            <div>
+                <h2 class="text-sm font-semibold mb-2 text-zinc-400">Книги в библиотеке</h2>
+                <div id="books-list" class="space-y-2"></div>
             </div>
         </div>
 
-            <h2 class="text-lg font-semibold mb-3">Ваша библиотека</h2>
-            <div id="books-list" class="space-y-2">
-                <!-- Список книг подгрузится динамически -->
-            </div>
-        </div>
-
-        <!-- Экран читалки (скрыт по умолчанию) -->
-        <div id="reader-view" class="hidden">
-            <button onclick="backToLibrary()" class="mb-4 text-xs bg-zinc-800 px-3 py-2 rounded-lg hover:bg-zinc-700">← Назад к библиотеке</button>
-            <h2 id="reader-book-title" class="text-xl font-bold mb-4"></h2>
+        <!-- ================= ЭКРАН 2: ЧИТАЛКА ================= -->
+        <div id="reader-view" class="hidden flex-1 flex flex-col h-full">
             
-            <!-- Главы -->
-            <div id="chapters-nav" class="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none"></div>
+            <!-- Компактная верхняя панель -->
+            <header class="card sticky top-0 z-10 flex justify-between items-center p-2 rounded-lg border mb-2 shadow-md">
+                <div class="flex items-center gap-2">
+                    <button onclick="backToLibrary()" class="text-xs px-2.5 py-1 rounded bg-zinc-700 text-zinc-200">← Выход</button>
+                    <span id="word-progress-badge" class="text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 font-medium">0% известных</span>
+                </div>
+                
+                <!-- Панель управления (Шрифт и Темы) -->
+                <div class="flex items-center gap-1.5 text-xs">
+                    <button onclick="changeFontSize(-1)" class="px-2 py-1 rounded bg-zinc-700 text-zinc-200 font-bold">A-</button>
+                    <button onclick="changeFontSize(1)" class="px-2 py-1 rounded bg-zinc-700 text-zinc-200 font-bold">A+</button>
+                    <div class="h-4 w-px bg-zinc-600 mx-0.5"></div>
+                    <button onclick="setTheme('dark')" class="w-5 h-5 rounded-full bg-zinc-900 border border-zinc-600">🌙</button>
+                    <button onclick="setTheme('sepia')" class="w-5 h-5 rounded-full bg-[#f4ecd8] text-amber-900 border border-amber-800 text-[10px] flex items-center justify-center font-bold">S</button>
+                    <button onclick="setTheme('light')" class="w-5 h-5 rounded-full bg-white border border-zinc-300 text-[10px] flex items-center justify-center font-bold">☀️</button>
+                </div>
+            </header>
 
-            <!-- Текст главы -->
-            <div id="chapter-content" class="bg-zinc-800 p-5 rounded-xl leading-relaxed text-zinc-200 border border-zinc-700 space-y-4"></div>
+            <!-- Навигация по главам -->
+            <div id="chapters-nav" class="flex gap-1.5 overflow-x-auto pb-2 mb-2 text-xs scrollbar-none"></div>
+
+            <!-- Область чтения с бесплатным переводом -->
+            <main id="reader-content" class="card flex-1 p-4 rounded-xl border overflow-y-auto leading-relaxed" style="font-size: 18px;">
+                <div id="sentences-container" class="space-y-4"></div>
+            </main>
+
+            <!-- Нижняя панель состояния -->
+            <footer class="mt-2 text-center text-xs text-zinc-500 py-1">
+                Нажмите на незнакомое слово, чтобы отметить его как известное (зелёный цвет).
+            </footer>
         </div>
+
     </div>
 
     <script>
-        // Инициализация базы данных Dexie
-        const db = new Dexie("DofusReaderDB");
+        // Инициализация БД Dexie
+        const db = new Dexie("DofusReaderDB_v2");
         db.version(1).stores({
             books: "++id, title, createdAt",
-            chapters: "++id, bookId, order"
+            chapters: "++id, bookId, order",
+            dictionary: "&word",
+            translations: "&hash"
         });
 
+        let knownWordsSet = new Set();
         let currentBookId = null;
+        let currentChapterId = null;
+        let currentFontSize = 18;
 
-        // Загрузка списка книг при старте
+        // При старте подгружаем словарь и список книг
+        async function initApp() {
+            await reloadDictionary();
+            await loadBooks();
+        }
+
+        async function reloadDictionary() {
+            const allWords = await db.dictionary.toArray();
+            knownWordsSet = new Set(allWords.map(item => item.word.toLowerCase()));
+            document.getElementById('dict-stats').innerText = `Словарь: ${knownWordsSet.size} слов`;
+        }
+
+        // Добавление пользовательского словаря
+        async function importUserDictionary() {
+            const text = document.getElementById('dict-import-text').value;
+            if (!text.trim()) return;
+
+            const words = text.toLowerCase().split(/[\n,;]+/).map(w => w.trim()).filter(w => w.length > 0);
+            const records = words.map(word => ({ word }));
+
+            await db.dictionary.bulkPut(records);
+            await reloadDictionary();
+            document.getElementById('dict-import-text').value = '';
+            alert(`Успешно добавлено слов: ${words.length}`);
+            
+            if (currentChapterId) {
+                renderCurrentChapter();
+            }
+        }
+
+        // Загрузка книг
         async function loadBooks() {
             const books = await db.books.toArray();
             const listEl = document.getElementById('books-list');
             
             if (books.length === 0) {
-                listEl.innerHTML = '<p class="text-sm text-zinc-500">Пока нет добавленных книг.</p>';
+                listEl.innerHTML = '<p class="text-xs text-zinc-500">Пока нет загруженных книг.</p>';
                 return;
             }
 
             listEl.innerHTML = books.map(b => `
-                <div onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')" class="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center cursor-pointer hover:bg-zinc-750">
-                    <span class="font-medium">${b.title}</span>
-                    <span class="text-xs text-zinc-400">Открыть →</span>
+                <div onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')" class="card p-3 rounded-lg border flex justify-between items-center cursor-pointer hover:border-amber-500">
+                    <span class="font-medium text-sm">${b.title}</span>
+                    <span class="text-xs text-amber-500">Читать →</span>
                 </div>
             `).join('');
         }
 
-        // Обработка загрузки EPUB файла
+        // Загрузка EPUB
         document.getElementById('epub-input').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -90,28 +168,21 @@
             try {
                 const zip = new JSZip();
                 const zipContent = await zip.loadAsync(file);
-                
                 const containerFile = zipContent.file('META-INF/container.xml');
-                if (!containerFile) throw new Error('Некорректный EPUB формат');
+                if (!containerFile) throw new Error('Некорректный EPUB');
 
                 const containerXml = await containerFile.async('text');
                 const parser = new DOMParser();
                 const containerDoc = parser.parseFromString(containerXml, 'text/xml');
                 const opfPath = containerDoc.querySelector('rootfile')?.getAttribute('full-path');
                 
-                if (!opfPath) throw new Error('Не найден OPF файл');
-
                 const opfFolder = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
                 const opfText = await zipContent.file(opfPath).async('text');
                 const opfDoc = parser.parseFromString(opfText, 'text/xml');
 
                 const title = opfDoc.querySelector('metadata > dc\\:title, title')?.textContent || file.name;
 
-                const bookId = await db.books.add({
-                    title: title,
-                    createdAt: Date.now()
-                });
-
+                const bookId = await db.books.add({ title, createdAt: Date.now() });
                 const items = Array.from(opfDoc.querySelectorAll('manifest > item'));
                 const spine = Array.from(opfDoc.querySelectorAll('spine > itemref')).map(r => r.getAttribute('idref'));
 
@@ -125,18 +196,12 @@
                     if (!htmlFile) continue;
 
                     const htmlContent = await htmlFile.async('text');
-                    
-                    await db.chapters.add({
-                        bookId: bookId,
-                        order: order++,
-                        title: `Глава ${order}`,
-                        htmlContent: htmlContent
-                    });
+                    await db.chapters.add({ bookId, order: order++, title: `Глава ${order}`, htmlContent });
                 }
 
                 await loadBooks();
             } catch (err) {
-                alert('Ошибка при импорте книги: ' + err.message);
+                alert('Ошибка импорта: ' + err.message);
             } finally {
                 loadingEl.classList.add('hidden');
                 e.target.value = '';
@@ -144,17 +209,16 @@
         });
 
         // Открытие книги
-        async function openBook(bookId, bookTitle) {
+        async function openBook(bookId, title) {
             currentBookId = bookId;
             document.getElementById('library-view').classList.add('hidden');
             document.getElementById('reader-view').classList.remove('hidden');
-            document.getElementById('reader-book-title').innerText = bookTitle;
 
             const chapters = await db.chapters.where('bookId').equals(bookId).sortBy('order');
             const navEl = document.getElementById('chapters-nav');
 
             navEl.innerHTML = chapters.map((ch, idx) => `
-                <button onclick="loadChapter(${ch.id})" class="text-xs px-3 py-1.5 rounded bg-zinc-800 border border-zinc-700 whitespace-nowrap hover:bg-zinc-700">
+                <button onclick="loadChapter(${ch.id})" class="px-2.5 py-1 rounded bg-zinc-800 border border-zinc-700 whitespace-nowrap text-xs hover:bg-zinc-700">
                     ${ch.title || 'Глава ' + (idx + 1)}
                 </button>
             `).join('');
@@ -164,18 +228,142 @@
             }
         }
 
-        // Загрузка контента главы
+        // Разбивка главы на предложения
         async function loadChapter(chapterId) {
-            const chapter = await db.chapters.get(chapterId);
-            if (chapter) {
-                // Извлекаем чистый body из HTML главы или показываем целиком
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(chapter.htmlContent, 'text/html');
-                const bodyContent = doc.body ? doc.body.innerHTML : chapter.htmlContent;
-                
-                document.getElementById('chapter-content').innerHTML = bodyContent;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+            currentChapterId = chapterId;
+            await renderCurrentChapter();
+        }
+
+        async function renderCurrentChapter() {
+            const chapter = await db.chapters.get(currentChapterId);
+            if (!chapter) return;
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(chapter.htmlContent, 'text/html');
+            const rawText = doc.body ? doc.body.textContent : chapter.htmlContent;
+
+            // Разбиваем текст на предложения
+            const sentences = rawText.match(/[^.!?]+[.!?]+/g) || [rawText];
+            const container = document.getElementById('sentences-container');
+            container.innerHTML = '';
+
+            let totalWordsInChapter = 0;
+            let knownWordsInChapter = 0;
+
+            for (let i = 0; i < sentences.length; i++) {
+                const origSentence = sentences[i].trim();
+                if (!origSentence) continue;
+
+                // Токенизация на слова
+                const words = origSentence.split(/(\s+|[^\w\s]+)/);
+                let sentenceUnknownCount = 0;
+
+                const sentenceHtml = words.map(w => {
+                    const clean = w.toLowerCase().replace(/[^a-z]/g, '');
+                    if (!clean) return w; // Пунктуация/пробелы
+
+                    totalWordsInChapter++;
+                    const isKnown = knownWordsSet.has(clean);
+                    if (isKnown) {
+                        knownWordsInChapter++;
+                        return `<span class="word word-known" onclick="toggleWord('${clean}')">${w}</span>`;
+                    } else {
+                        sentenceUnknownCount++;
+                        return `<span class="word" onclick="toggleWord('${clean}')">${w}</span>`;
+                    }
+                }).join('');
+
+                // Контейнер блока предложения
+                const block = document.createElement('div');
+                block.className = 'sentence-block';
+
+                const transEl = document.createElement('div');
+                transEl.className = 'translation-text text-amber-400';
+                transEl.id = `trans-${i}`;
+
+                const origEl = document.createElement('div');
+                origEl.className = 'original-text';
+                origEl.innerHTML = sentenceHtml;
+
+                block.appendChild(transEl);
+                block.appendChild(origEl);
+                container.appendChild(block);
+
+                // Если есть неизвестные слова, запрашиваем переводы
+                if (sentenceUnknownCount > 0) {
+                    fetchTranslation(origSentence, `trans-${i}`);
+                } else {
+                    transEl.style.display = 'none'; // Скрываем перевод ("фрейм"), если все слова известны
+                }
             }
+
+            // Обновляем процент прогресса
+            const percent = totalWordsInChapter > 0 ? Math.round((knownWordsInChapter / totalWordsInChapter) * 100) : 0;
+            document.getElementById('word-progress-badge').innerText = `${percent}% известных`;
+        }
+
+        // Переключение слова известное/неизвестное по клику
+        async function toggleWord(word) {
+            word = word.toLowerCase();
+            if (knownWordsSet.has(word)) {
+                knownWordsSet.delete(word);
+                await db.dictionary.where('word').equals(word).delete();
+            } else {
+                knownWordsSet.add(word);
+                await db.dictionary.put({ word });
+            }
+            await reloadDictionary();
+            renderCurrentChapter(); // Мгновенно обновляем подсветку и фреймы
+        }
+
+        // Бесплатный перевод с каскадным Fallback (Lingva -> MyMemory)
+        async function fetchTranslation(text, elementId) {
+            const hash = btoa(unescape(encodeURIComponent(text))).slice(0, 32);
+            const cached = await db.translations.get(hash);
+
+            if (cached) {
+                document.getElementById(elementId).innerText = cached.translation;
+                return;
+            }
+
+            try {
+                // Провайдер 1: Lingva Translate (Google Mirror)
+                const res = await fetch(`https://lingva.ml/api/v1/en/ru/${encodeURIComponent(text)}`);
+                const data = await res.json();
+                if (data.translation) {
+                    saveAndShowTranslation(hash, data.translation, elementId);
+                    return;
+                }
+            } catch (e) {
+                // Игнорируем и переходим к резервному
+            }
+
+            try {
+                // Провайдер 2 (Fallback): MyMemory API
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ru`);
+                const data = await res.json();
+                if (data.responseData && data.responseData.translatedText) {
+                    saveAndShowTranslation(hash, data.responseData.translatedText, elementId);
+                }
+            } catch (e) {
+                document.getElementById(elementId).innerText = '[Ошибка загрузки перевода]';
+            }
+        }
+
+        async function saveAndShowTranslation(hash, translation, elementId) {
+            await db.translations.put({ hash, translation });
+            const el = document.getElementById(elementId);
+            if (el) el.innerText = translation;
+        }
+
+        // Настройки шрифта и тем
+        function changeFontSize(delta) {
+            currentFontSize = Math.max(12, Math.min(32, currentFontSize + delta));
+            document.getElementById('reader-content').style.fontSize = currentFontSize + 'px';
+        }
+
+        function setTheme(theme) {
+            document.body.className = `theme-${theme} min-h-screen flex flex-col font-sans antialiased select-none`;
         }
 
         function backToLibrary() {
@@ -183,8 +371,7 @@
             document.getElementById('library-view').classList.remove('hidden');
         }
 
-        // Запуск при загрузке страницы
-        loadBooks();
+        initApp();
     </script>
 </body>
 </html>
