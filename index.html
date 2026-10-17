@@ -16,43 +16,55 @@
         .theme-sepia .card { background-color: #eae0c8; border-color: #d8ccb0; }
         
         .word { cursor: pointer; border-radius: 2px; padding: 0 1px; transition: background 0.15s; }
-        .word-known { color: #22c55e; font-weight: 500; }
-        .word:active { background-color: rgba(234, 179, 8, 0.3); }
+        .word-known { color: #22c55e; font-weight: 600; }
+        .word:active { background-color: rgba(234, 179, 8, 0.4); }
         .sentence-block { margin-bottom: 1.25rem; }
-        .translation-text { font-size: 0.9em; margin-bottom: 0.25rem; opacity: 0.85; line-height: 1.4; }
+        .translation-text { font-size: 0.95em; margin-bottom: 0.35rem; color: #f59e0b; line-height: 1.4; font-weight: 400; }
         .original-text { line-height: 1.6; }
     </style>
 </head>
 <body class="theme-dark min-h-screen flex flex-col font-sans antialiased select-none">
 
-    <!-- Приложение -->
     <div id="app" class="flex-1 flex flex-col max-w-3xl w-full mx-auto px-3 py-2">
 
-        <!-- ================= ЭКРАН 1: БИБЛИОТЕКА И НАСТРОЙКИ ================= -->
+        <!-- ================= ЭКРАН 1: БИБЛИОТЕКА И УПРАВЛЕНИЕ СЛОВАРЕМ ================= -->
         <div id="library-view" class="space-y-4">
             <header class="flex justify-between items-center py-2 border-b border-zinc-700">
                 <h1 class="text-xl font-bold text-amber-500">Dofus Reader</h1>
                 <span id="dict-stats" class="text-xs text-zinc-400">Словарь: 0 слов</span>
             </header>
 
-            <!-- Импорт книги -->
+            <!-- Загрузка EPUB -->
             <div class="card p-3 rounded-xl border">
-                <h2 class="text-xs font-semibold mb-2 uppercase tracking-wider text-zinc-400">Загрузка EPUB</h2>
+                <h2 class="text-xs font-semibold mb-2 uppercase tracking-wider text-zinc-400">Загрузка EPUB книги</h2>
                 <input type="file" id="epub-input" accept=".epub,application/epub+zip,application/x-mobipocket-ebook,*/*" class="block w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
-                <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Обработка и распаковка файла...</p>
+                <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Обработка и распаковка книги...</p>
             </div>
 
-            <!-- Импорт пользовательского словаря -->
-            <div class="card p-3 rounded-xl border">
-                <h2 class="text-xs font-semibold mb-1 uppercase tracking-wider text-zinc-400">Импорт вашего словаря</h2>
-                <p class="text-xs text-zinc-400 mb-2">Вставьте слова через запятую или с новой строки:</p>
-                <textarea id="dict-import-text" rows="3" class="w-full text-xs p-2 rounded bg-zinc-900 border border-zinc-700 text-zinc-200 mb-2" placeholder="know, running, book, house..."></textarea>
-                <button onclick="importUserDictionary()" class="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition">Добавить слова в словарь</button>
+            <!-- Резервное копирование / Импорт словаря JSON -->
+            <div class="card p-3 rounded-xl border space-y-3">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Управление словарем (Резервная копия)</h2>
+                
+                <div class="flex gap-2">
+                    <button onclick="exportDictionaryJSON()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition">
+                        📥 Скачать словарь (JSON)
+                    </button>
+                    <label class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg text-center cursor-pointer transition">
+                        📤 Загрузить JSON
+                        <input type="file" id="json-dict-input" accept=".json" class="hidden" onchange="importDictionaryJSON(event)">
+                    </label>
+                </div>
+
+                <div>
+                    <p class="text-xs text-zinc-400 mb-1">Или вставьте слова текстом (через запятую/перенос):</p>
+                    <textarea id="dict-import-text" rows="2" class="w-full text-xs p-2 rounded bg-zinc-900 border border-zinc-700 text-zinc-200 mb-2" placeholder="know, running, book..."></textarea>
+                    <button onclick="importUserDictionaryText()" class="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition">Добавить списком</button>
+                </div>
             </div>
 
-            <!-- Список книг -->
+            <!-- Список книг с возможностью удаления -->
             <div>
-                <h2 class="text-sm font-semibold mb-2 text-zinc-400">Книги в библиотеке</h2>
+                <h2 class="text-sm font-semibold mb-2 text-zinc-400">Ваша библиотека</h2>
                 <div id="books-list" class="space-y-2"></div>
             </div>
         </div>
@@ -67,7 +79,6 @@
                     <span id="word-progress-badge" class="text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 font-medium">0% известных</span>
                 </div>
                 
-                <!-- Панель управления (Шрифт и Темы) -->
                 <div class="flex items-center gap-1.5 text-xs">
                     <button onclick="changeFontSize(-1)" class="px-2 py-1 rounded bg-zinc-700 text-zinc-200 font-bold">A-</button>
                     <button onclick="changeFontSize(1)" class="px-2 py-1 rounded bg-zinc-700 text-zinc-200 font-bold">A+</button>
@@ -78,25 +89,23 @@
                 </div>
             </header>
 
-            <!-- Навигация по главам -->
+            <!-- Список глав -->
             <div id="chapters-nav" class="flex gap-1.5 overflow-x-auto pb-2 mb-2 text-xs scrollbar-none"></div>
 
-            <!-- Область чтения с бесплатным переводом -->
+            <!-- Область чтения -->
             <main id="reader-content" class="card flex-1 p-4 rounded-xl border overflow-y-auto leading-relaxed" style="font-size: 18px;">
                 <div id="sentences-container" class="space-y-4"></div>
             </main>
 
-            <!-- Нижняя панель состояния -->
             <footer class="mt-2 text-center text-xs text-zinc-500 py-1">
-                Нажмите на незнакомое слово, чтобы отметить его как известное (зелёный цвет).
+                Клик по слову меняет его статус (зеленый = знаю). Когда все слова предложения известны, перевод прячется.
             </footer>
         </div>
 
     </div>
 
     <script>
-        // Инициализация БД Dexie
-        const db = new Dexie("DofusReaderDB_v2");
+        const db = new Dexie("DofusReaderDB_v3");
         db.version(1).stores({
             books: "++id, title, createdAt",
             chapters: "++id, bookId, order",
@@ -109,7 +118,6 @@
         let currentChapterId = null;
         let currentFontSize = 18;
 
-        // При старте подгружаем словарь и список книг
         async function initApp() {
             await reloadDictionary();
             await loadBooks();
@@ -121,8 +129,44 @@
             document.getElementById('dict-stats').innerText = `Словарь: ${knownWordsSet.size} слов`;
         }
 
-        // Добавление пользовательского словаря
-        async function importUserDictionary() {
+        // Скачивание словаря в JSON
+        async function exportDictionaryJSON() {
+            const allWords = await db.dictionary.toArray();
+            const jsonString = JSON.stringify(allWords.map(w => w.word), null, 2);
+            const blob = new Blob([jsonString], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `dofus_dictionary_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Загрузка словаря из JSON файла
+        async function importDictionaryJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const wordsArray = JSON.parse(e.target.result);
+                    if (Array.isArray(wordsArray)) {
+                        const records = wordsArray.map(w => ({ word: (typeof w === 'string' ? w : w.word).toLowerCase().trim() })).filter(w => w.word);
+                        await db.dictionary.bulkPut(records);
+                        await reloadDictionary();
+                        alert(`Словарь успешно импортирован! Добавлено: ${records.length} слов.`);
+                        if (currentChapterId) renderCurrentChapter();
+                    }
+                } catch (err) {
+                    alert("Ошибка чтения JSON файла: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function importUserDictionaryText() {
             const text = document.getElementById('dict-import-text').value;
             if (!text.trim()) return;
 
@@ -132,14 +176,10 @@
             await db.dictionary.bulkPut(records);
             await reloadDictionary();
             document.getElementById('dict-import-text').value = '';
-            alert(`Успешно добавлено слов: ${words.length}`);
-            
-            if (currentChapterId) {
-                renderCurrentChapter();
-            }
+            alert(`Успешно добавлено: ${words.length} слов.`);
+            if (currentChapterId) renderCurrentChapter();
         }
 
-        // Загрузка книг
         async function loadBooks() {
             const books = await db.books.toArray();
             const listEl = document.getElementById('books-list');
@@ -150,14 +190,23 @@
             }
 
             listEl.innerHTML = books.map(b => `
-                <div onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')" class="card p-3 rounded-lg border flex justify-between items-center cursor-pointer hover:border-amber-500">
-                    <span class="font-medium text-sm">${b.title}</span>
-                    <span class="text-xs text-amber-500">Читать →</span>
+                <div class="card p-3 rounded-lg border flex justify-between items-center">
+                    <span class="font-medium text-sm cursor-pointer hover:text-amber-500" onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')">${b.title}</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')" class="text-xs bg-amber-600 text-white px-2.5 py-1 rounded hover:bg-amber-700">Читать</button>
+                        <button onclick="deleteBook(${b.id})" class="text-xs bg-red-900/50 text-red-300 px-2.5 py-1 rounded hover:bg-red-800">Удалить</button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        // Загрузка EPUB
+        async function deleteBook(bookId) {
+            if (!confirm("Удалить эту книгу из библиотеки?")) return;
+            await db.books.delete(bookId);
+            await db.chapters.where('bookId').equals(bookId).delete();
+            await loadBooks();
+        }
+
         document.getElementById('epub-input').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -208,7 +257,6 @@
             }
         });
 
-        // Открытие книги
         async function openBook(bookId, title) {
             currentBookId = bookId;
             document.getElementById('library-view').classList.add('hidden');
@@ -223,12 +271,9 @@
                 </button>
             `).join('');
 
-            if (chapters.length > 0) {
-                loadChapter(chapters[0].id);
-            }
+            if (chapters.length > 0) loadChapter(chapters[0].id);
         }
 
-        // Разбивка главы на предложения
         async function loadChapter(chapterId) {
             currentChapterId = chapterId;
             await renderCurrentChapter();
@@ -242,7 +287,6 @@
             const doc = parser.parseFromString(chapter.htmlContent, 'text/html');
             const rawText = doc.body ? doc.body.textContent : chapter.htmlContent;
 
-            // Разбиваем текст на предложения
             const sentences = rawText.match(/[^.!?]+[.!?]+/g) || [rawText];
             const container = document.getElementById('sentences-container');
             container.innerHTML = '';
@@ -254,13 +298,13 @@
                 const origSentence = sentences[i].trim();
                 if (!origSentence) continue;
 
-                // Токенизация на слова
+                // Токенизируем
                 const words = origSentence.split(/(\s+|[^\w\s]+)/);
                 let sentenceUnknownCount = 0;
 
                 const sentenceHtml = words.map(w => {
                     const clean = w.toLowerCase().replace(/[^a-z]/g, '');
-                    if (!clean) return w; // Пунктуация/пробелы
+                    if (!clean) return w; // Знаки препинания не считаем за слова
 
                     totalWordsInChapter++;
                     const isKnown = knownWordsSet.has(clean);
@@ -273,14 +317,15 @@
                     }
                 }).join('');
 
-                // Контейнер блока предложения
                 const block = document.createElement('div');
                 block.className = 'sentence-block';
 
+                // РУССКИЙ ПЕРЕВОД ВСЕГДА НАВЕРХУ
                 const transEl = document.createElement('div');
-                transEl.className = 'translation-text text-amber-400';
+                transEl.className = 'translation-text';
                 transEl.id = `trans-${i}`;
 
+                // АНГЛИЙСКИЙ ОРИГИНАЛ СНИЗУ
                 const origEl = document.createElement('div');
                 origEl.className = 'original-text';
                 origEl.innerHTML = sentenceHtml;
@@ -289,20 +334,17 @@
                 block.appendChild(origEl);
                 container.appendChild(block);
 
-                // Если есть неизвестные слова, запрашиваем переводы
                 if (sentenceUnknownCount > 0) {
-                    fetchTranslation(origSentence, `trans-${i}`);
+                    fetchTranslationMulti(origSentence, `trans-${i}`);
                 } else {
-                    transEl.style.display = 'none'; // Скрываем перевод ("фрейм"), если все слова известны
+                    transEl.style.display = 'none'; // Скрываем перевод, если все слова известны
                 }
             }
 
-            // Обновляем процент прогресса
             const percent = totalWordsInChapter > 0 ? Math.round((knownWordsInChapter / totalWordsInChapter) * 100) : 0;
             document.getElementById('word-progress-badge').innerText = `${percent}% известных`;
         }
 
-        // Переключение слова известное/неизвестное по клику
         async function toggleWord(word) {
             word = word.toLowerCase();
             if (knownWordsSet.has(word)) {
@@ -313,65 +355,48 @@
                 await db.dictionary.put({ word });
             }
             await reloadDictionary();
-            renderCurrentChapter(); // Мгновенно обновляем подсветку и фреймы
+            renderCurrentChapter();
         }
 
-        // Бесплатный перевод с каскадным Fallback (Lingva -> MyMemory)
-        async function fetchTranslation(text, elementId) {
+        // Мульти-провайдер перевода с мгновенной фильтрацией ошибок MyMemory
+        async function fetchTranslationMulti(text, elementId) {
             const hash = btoa(unescape(encodeURIComponent(text))).slice(0, 32);
             const cached = await db.translations.get(hash);
 
-            if (cached) {
+            if (cached && !cached.translation.includes("MYMEMORY WARNING")) {
                 document.getElementById(elementId).innerText = cached.translation;
                 return;
             }
 
+            // Провайдер 1: Google Translate API (Клиентский зеркальный эндпоинт без CORS)
             try {
-                // Провайдер 1: Lingva Translate (Google Mirror)
-                const res = await fetch(`https://lingva.ml/api/v1/en/ru/${encodeURIComponent(text)}`);
+                const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t&q=${encodeURIComponent(text)}`);
                 const data = await res.json();
-                if (data.translation) {
-                    saveAndShowTranslation(hash, data.translation, elementId);
+                if (data && data[0]) {
+                    const translatedText = data[0].map(item => item[0]).join('');
+                    if (translatedText) {
+                        saveAndShowTranslation(hash, translatedText, elementId);
+                        return;
+                    }
+                }
+            } catch (e) {}
+
+            // Провайдер 2: LibreTranslate Публичный Инстанс
+            try {
+                const res = await fetch("https://libretranslate.de/translate", {
+                    method: "POST",
+                    body: JSON.stringify({ q: text, source: "en", target: "ru" }),
+                    headers: { "Content-Type": "application/json" }
+                });
+                const data = await res.json();
+                if (data.translatedText) {
+                    saveAndShowTranslation(hash, data.translatedText, elementId);
                     return;
                 }
-            } catch (e) {
-                // Игнорируем и переходим к резервному
-            }
+            } catch (e) {}
 
+            // Провайдер 3: MyMemory (с фильтрацией плашки лимита)
             try {
-                // Провайдер 2 (Fallback): MyMemory API
                 const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ru`);
                 const data = await res.json();
-                if (data.responseData && data.responseData.translatedText) {
-                    saveAndShowTranslation(hash, data.responseData.translatedText, elementId);
-                }
-            } catch (e) {
-                document.getElementById(elementId).innerText = '[Ошибка загрузки перевода]';
-            }
-        }
-
-        async function saveAndShowTranslation(hash, translation, elementId) {
-            await db.translations.put({ hash, translation });
-            const el = document.getElementById(elementId);
-            if (el) el.innerText = translation;
-        }
-
-        // Настройки шрифта и тем
-        function changeFontSize(delta) {
-            currentFontSize = Math.max(12, Math.min(32, currentFontSize + delta));
-            document.getElementById('reader-content').style.fontSize = currentFontSize + 'px';
-        }
-
-        function setTheme(theme) {
-            document.body.className = `theme-${theme} min-h-screen flex flex-col font-sans antialiased select-none`;
-        }
-
-        function backToLibrary() {
-            document.getElementById('reader-view').classList.add('hidden');
-            document.getElementById('library-view').classList.remove('hidden');
-        }
-
-        initApp();
-    </script>
-</body>
-</html>
+                if (data.responseData && data.responseData.tr
