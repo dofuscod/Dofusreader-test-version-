@@ -1,22 +1,183 @@
 <!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dofus Reader</title>
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        margin: 0;
-        padding: 0;
-        background: #121212;
-        color: #e0e0e0;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app"></div>
-    <!-- Убрали ведущий слэш для корректного поиска скрипта на GitHub Pages -->
-    <script type="module" src="./src/main.tsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dofus Reader (MVP)</title>
+    <!-- Подключаем Tailwind для быстрого и красивого интерфейса -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Подключаем Dexie.js (IndexedDB) и JSZip для распаковки EPUB прямо в браузере -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body class="bg-zinc-900 text-zinc-100 min-h-screen p-4">
+    <div id="app" class="max-w-2xl mx-auto">
+        <header class="mb-6">
+            <h1 class="text-2xl font-bold text-amber-500">Dofus Reader</h1>
+            <p class="text-xs text-zinc-400">Читай легко, учи слова</p>
+        </header>
+
+        <!-- Главный экран: Библиотека и Загрузка -->
+        <div id="library-view">
+            <div class="bg-zinc-800 p-4 rounded-xl shadow mb-6 border border-zinc-700">
+                <h2 class="text-sm font-semibold mb-2">Загрузить EPUB книгу</h2>
+                <input type="file" id="epub-input" accept=".epub" class="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-700 cursor-pointer">
+                <p id="loading-text" class="text-xs text-amber-400 mt-2 hidden">Распаковка и сохранение книги...</p>
+            </div>
+
+            <h2 class="text-lg font-semibold mb-3">Ваша библиотека</h2>
+            <div id="books-list" class="space-y-2">
+                <!-- Список книг подгрузится динамически -->
+            </div>
+        </div>
+
+        <!-- Экран читалки (скрыт по умолчанию) -->
+        <div id="reader-view" class="hidden">
+            <button onclick="backToLibrary()" class="mb-4 text-xs bg-zinc-800 px-3 py-2 rounded-lg hover:bg-zinc-700">← Назад к библиотеке</button>
+            <h2 id="reader-book-title" class="text-xl font-bold mb-4"></h2>
+            
+            <!-- Главы -->
+            <div id="chapters-nav" class="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none"></div>
+
+            <!-- Текст главы -->
+            <div id="chapter-content" class="bg-zinc-800 p-5 rounded-xl leading-relaxed text-zinc-200 border border-zinc-700 space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация базы данных Dexie
+        const db = new Dexie("DofusReaderDB");
+        db.version(1).stores({
+            books: "++id, title, createdAt",
+            chapters: "++id, bookId, order"
+        });
+
+        let currentBookId = null;
+
+        // Загрузка списка книг при старте
+        async function loadBooks() {
+            const books = await db.books.toArray();
+            const listEl = document.getElementById('books-list');
+            
+            if (books.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-zinc-500">Пока нет добавленных книг.</p>';
+                return;
+            }
+
+            listEl.innerHTML = books.map(b => `
+                <div onclick="openBook(${b.id}, '${b.title.replace(/'/g, "")}')" class="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center cursor-pointer hover:bg-zinc-750">
+                    <span class="font-medium">${b.title}</span>
+                    <span class="text-xs text-zinc-400">Открыть →</span>
+                </div>
+            `).join('');
+        }
+
+        // Обработка загрузки EPUB файла
+        document.getElementById('epub-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const loadingEl = document.getElementById('loading-text');
+            loadingEl.classList.remove('hidden');
+
+            try {
+                const zip = new JSZip();
+                const zipContent = await zip.loadAsync(file);
+                
+                const containerFile = zipContent.file('META-INF/container.xml');
+                if (!containerFile) throw new Error('Некорректный EPUB формат');
+
+                const containerXml = await containerFile.async('text');
+                const parser = new DOMParser();
+                const containerDoc = parser.parseFromString(containerXml, 'text/xml');
+                const opfPath = containerDoc.querySelector('rootfile')?.getAttribute('full-path');
+                
+                if (!opfPath) throw new Error('Не найден OPF файл');
+
+                const opfFolder = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+                const opfText = await zipContent.file(opfPath).async('text');
+                const opfDoc = parser.parseFromString(opfText, 'text/xml');
+
+                const title = opfDoc.querySelector('metadata > dc\\:title, title')?.textContent || file.name;
+
+                const bookId = await db.books.add({
+                    title: title,
+                    createdAt: Date.now()
+                });
+
+                const items = Array.from(opfDoc.querySelectorAll('manifest > item'));
+                const spine = Array.from(opfDoc.querySelectorAll('spine > itemref')).map(r => r.getAttribute('idref'));
+
+                let order = 0;
+                for (const idref of spine) {
+                    const item = items.find(i => i.getAttribute('id') === idref);
+                    if (!item) continue;
+                    
+                    const href = item.getAttribute('href');
+                    const htmlFile = zipContent.file(opfFolder + href);
+                    if (!htmlFile) continue;
+
+                    const htmlContent = await htmlFile.async('text');
+                    
+                    await db.chapters.add({
+                        bookId: bookId,
+                        order: order++,
+                        title: `Глава ${order}`,
+                        htmlContent: htmlContent
+                    });
+                }
+
+                await loadBooks();
+            } catch (err) {
+                alert('Ошибка при импорте книги: ' + err.message);
+            } finally {
+                loadingEl.classList.add('hidden');
+                e.target.value = '';
+            }
+        });
+
+        // Открытие книги
+        async function openBook(bookId, bookTitle) {
+            currentBookId = bookId;
+            document.getElementById('library-view').classList.add('hidden');
+            document.getElementById('reader-view').classList.remove('hidden');
+            document.getElementById('reader-book-title').innerText = bookTitle;
+
+            const chapters = await db.chapters.where('bookId').equals(bookId).sortBy('order');
+            const navEl = document.getElementById('chapters-nav');
+
+            navEl.innerHTML = chapters.map((ch, idx) => `
+                <button onclick="loadChapter(${ch.id})" class="text-xs px-3 py-1.5 rounded bg-zinc-800 border border-zinc-700 whitespace-nowrap hover:bg-zinc-700">
+                    ${ch.title || 'Глава ' + (idx + 1)}
+                </button>
+            `).join('');
+
+            if (chapters.length > 0) {
+                loadChapter(chapters[0].id);
+            }
+        }
+
+        // Загрузка контента главы
+        async function loadChapter(chapterId) {
+            const chapter = await db.chapters.get(chapterId);
+            if (chapter) {
+                // Извлекаем чистый body из HTML главы или показываем целиком
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(chapter.htmlContent, 'text/html');
+                const bodyContent = doc.body ? doc.body.innerHTML : chapter.htmlContent;
+                
+                document.getElementById('chapter-content').innerHTML = bodyContent;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function backToLibrary() {
+            document.getElementById('reader-view').classList.add('hidden');
+            document.getElementById('library-view').classList.remove('hidden');
+        }
+
+        // Запуск при загрузке страницы
+        loadBooks();
+    </script>
+</body>
 </html>
